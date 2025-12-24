@@ -49,7 +49,7 @@ PLANS = {
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start command handler - Post main menu to channel"""
+    """Start command handler - Register user and show menu in channel"""
     user = update.effective_user
     
     # Check if user has a public username
@@ -60,15 +60,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Create user in database
+    # Create user in database (auto-registration)
     db.create_user(user.id, user.username)
+    
+    # Get user data to show current status
+    user_data = db.get_user(user.id)
+    verified_claims = user_data['total_verified_claims']
     
     # Create main menu keyboard
     keyboard = [
-        [InlineKeyboardButton("🔗 Submit Referral Link", callback_data="menu_submit")],
-        [InlineKeyboardButton("🔍 Browse Links", callback_data="menu_browse")],
-        [InlineKeyboardButton("🎁 Claim Reward", callback_data="menu_claim")],
         [InlineKeyboardButton("📊 My Status", callback_data="menu_status")],
+        [InlineKeyboardButton("🔍 Browse Available Links", callback_data="menu_browse")],
+        [InlineKeyboardButton("🔗 Submit Referral Link", callback_data="menu_submit")],
+        [InlineKeyboardButton("🎁 Claim Reward", callback_data="menu_claim")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -76,13 +80,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👋 Welcome to RefLoop, @{user.username}!\n\n"
         "🔗 Share referral links and earn Telegram Stars!\n\n"
         "📋 How it works:\n"
-        "1️⃣ Submit your referral link (choose a plan)\n"
-        "2️⃣ Users complete sign-ups and earn 3 ⭐ per verified claim\n"
-        "3️⃣ Links auto-delete when limit is reached\n\n"
+        "• Complete 3 verified sign-ups to unlock FREE link submission\n"
+        "• OR pay Stars to submit immediately (25/40/100 ⭐)\n"
+        "• Earn 3 ⭐ for each verified claim you complete\n\n"
         "💰 Pricing Plans:\n"
         "• Plan A: 5 referrals → 25 ⭐\n"
         "• Plan B: 10 referrals → 40 ⭐\n"
         "• Plan C: 30 referrals → 100 ⭐\n\n"
+        f"📊 Your Status: {verified_claims}/3 claims completed\n\n"
         "Choose an option below:"
     )
     
@@ -148,12 +153,12 @@ async def my_status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.message.reply_text(status_msg)
 
 async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start link submission process - Show plan selection"""
+    """Start link submission process - Show payment or free option"""
     query = update.callback_query if update.callback_query else None
     user = update.effective_user
     
     if not user.username:
-        msg = "❌ You need a public username to use this bot."
+        msg = "❌ You need a public Telegram username to use this bot."
         if query:
             await query.message.reply_text(msg)
         else:
@@ -162,31 +167,57 @@ async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_data = db.get_user(user.id)
     if not user_data:
-        msg = "❌ Please use /start first."
-        if query:
-            await query.message.reply_text(msg)
-        else:
-            await update.message.reply_text(msg)
-        return ConversationHandler.END
+        # Auto-register user
+        db.create_user(user.id, user.username)
+        user_data = db.get_user(user.id)
     
-    # Show plan selection
-    keyboard = [
-        [InlineKeyboardButton(f"💎 Plan A - 5 Referrals (25 ⭐)", callback_data="plan_A")],
-        [InlineKeyboardButton(f"💎 Plan B - 10 Referrals (40 ⭐)", callback_data="plan_B")],
-        [InlineKeyboardButton(f"💎 Plan C - 30 Referrals (100 ⭐)", callback_data="plan_C")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="submit_cancel")]
-    ]
+    verified_claims = user_data['total_verified_claims']
+    free_available = user_data['free_submissions_available']
+    
+    # Check if user has completed 3 claims or has free submissions
+    if verified_claims >= 3 or free_available > 0:
+        # Show both options: pay or use free
+        keyboard = [
+            [InlineKeyboardButton("💎 Plan A - 5 Referrals (25 ⭐)", callback_data="plan_A")],
+            [InlineKeyboardButton("💎 Plan B - 10 Referrals (40 ⭐)", callback_data="plan_B")],
+            [InlineKeyboardButton("💎 Plan C - 30 Referrals (100 ⭐)", callback_data="plan_C")],
+            [InlineKeyboardButton("🎁 Use Free Submission", callback_data="plan_FREE")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="submit_cancel")]
+        ]
+        msg_text = (
+            "🔗 Submit Your Referral Link\n\n"
+            f"✅ You have {free_available} free submission(s) available!\n\n"
+            "Choose an option:\n\n"
+            "💎 Paid Plans:\n"
+            "• Plan A: 5 referrals → 25 ⭐\n"
+            "• Plan B: 10 referrals → 40 ⭐\n"
+            "• Plan C: 30 referrals → 100 ⭐\n\n"
+            "🎁 Or use your free submission!\n\n"
+            "Each verified claim earns users 3 ⭐\n"
+            "Links auto-delete when limit is reached."
+        )
+    else:
+        # Only show paid options
+        keyboard = [
+            [InlineKeyboardButton("💎 Plan A - 5 Referrals (25 ⭐)", callback_data="plan_A")],
+            [InlineKeyboardButton("💎 Plan B - 10 Referrals (40 ⭐)", callback_data="plan_B")],
+            [InlineKeyboardButton("💎 Plan C - 30 Referrals (100 ⭐)", callback_data="plan_C")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="submit_cancel")]
+        ]
+        remaining = 3 - verified_claims
+        msg_text = (
+            "🔗 Submit Your Referral Link\n\n"
+            f"📊 Your progress: {verified_claims}/3 verified claims\n\n"
+            f"💡 Complete {remaining} more claim(s) to unlock FREE submission!\n\n"
+            "Or choose a paid plan:\n\n"
+            "💎 Plan A: 5 referrals → 25 ⭐\n"
+            "💎 Plan B: 10 referrals → 40 ⭐\n"
+            "💎 Plan C: 30 referrals → 100 ⭐\n\n"
+            "Each verified claim earns users 3 ⭐\n"
+            "Links auto-delete when limit is reached."
+        )
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    msg_text = (
-        "🔗 Submit Your Referral Link\n\n"
-        "Choose a plan:\n\n"
-        "💎 Plan A: Up to 5 referrals → 25 ⭐\n"
-        "💎 Plan B: Up to 10 referrals → 40 ⭐\n"
-        "💎 Plan C: Up to 30 referrals → 100 ⭐\n\n"
-        "Each verified claim earns the user 3 ⭐\n"
-        "Links auto-delete when limit is reached."
-    )
     
     if query:
         await query.message.reply_text(msg_text, reply_markup=reply_markup)
@@ -194,9 +225,10 @@ async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=reply_markup)
     
     return SUBMIT_PLAN
+    return SUBMIT_PLAN
 
 async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle plan selection"""
+    """Handle plan selection including FREE option"""
     query = update.callback_query
     await query.answer()
     
@@ -204,11 +236,29 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text("❌ Submission cancelled.")
         return ConversationHandler.END
     
-    # Extract plan (A, B, or C)
-    plan = query.data.split('_')[1]
-    context.user_data['plan'] = plan
-    context.user_data['max_claims'] = PLANS[plan]['max_claims']
-    context.user_data['price'] = PLANS[plan]['price']
+    # Check if FREE plan
+    if query.data == "plan_FREE":
+        user_data = db.get_user(query.from_user.id)
+        if user_data['free_submissions_available'] <= 0:
+            await query.edit_message_text(
+                "❌ You don't have any free submissions available.\n"
+                "Complete 3 verified claims to unlock free submission!"
+            )
+            return ConversationHandler.END
+        
+        context.user_data['plan'] = 'FREE'
+        context.user_data['max_claims'] = 5  # Default for free
+        context.user_data['price'] = 0
+        context.user_data['payment_method'] = 'free'
+        plan_name = "Free Submission (5 referrals)"
+    else:
+        # Extract plan (A, B, or C)
+        plan = query.data.split('_')[1]
+        context.user_data['plan'] = plan
+        context.user_data['max_claims'] = PLANS[plan]['max_claims']
+        context.user_data['price'] = PLANS[plan]['price']
+        context.user_data['payment_method'] = 'paid'
+        plan_name = PLANS[plan]['name']
     
     # Show categories
     keyboard = [[InlineKeyboardButton(cat, callback_data=f"cat_{i}")] 
@@ -217,7 +267,7 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
-        f"✅ Selected: {PLANS[plan]['name']}\n\n"
+        f"✅ Selected: {plan_name}\n\n"
         "📂 Select a category for your referral link:",
         reply_markup=reply_markup
     )
@@ -271,25 +321,70 @@ async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SUBMIT_DESCRIPTION
 
 async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle description and send payment invoice"""
+    """Handle description and send payment invoice or create free submission"""
     description = update.message.text.strip()
+    
+    # Validate description length (max 120 characters)
+    if len(description) > 120:
+        await update.message.reply_text(
+            f"❌ Description too long! ({len(description)}/120 characters)\n\n"
+            "Please send a shorter description (max 120 characters):"
+        )
+        return SUBMIT_DESCRIPTION
+    
     context.user_data['description'] = description
     
-    # Send invoice for the selected plan
-    plan = context.user_data['plan']
-    price = context.user_data['price']
-    max_claims = context.user_data['max_claims']
+    # Check if this is a free submission
+    payment_method = context.user_data.get('payment_method', 'paid')
     
-    await update.message.reply_invoice(
-        title=f"Submit Referral Link - {PLANS[plan]['name']}",
-        description=f"Pay {price} Telegram Stars to submit your referral link with up to {max_claims} referrals",
-        payload=f"submit_link_{update.effective_user.id}_{plan}",
-        provider_token="",  # Empty for Telegram Stars
-        currency="XTR",
-        prices=[LabeledPrice(f"Plan {plan}", price)]
-    )
+    if payment_method == 'free':
+        # Free submission - create link directly without payment
+        max_claims = 5  # Free submissions get 5 referrals
+        
+        # Use the free submission slot
+        db.use_free_submission(update.effective_user.id)
+        
+        # Create the referral link
+        link_id = db.create_referral_link(
+            update.effective_user.id,
+            context.user_data['category'],
+            context.user_data['service_name'],
+            context.user_data['url'],
+            context.user_data['description'],
+            max_claims
+        )
+        
+        await update.message.reply_text(
+            f"✅ Free submission successful! Link created! (ID: {link_id})\n\n"
+            f"📂 {context.user_data['category']}\n"
+            f"📝 {context.user_data['service_name']}\n"
+            f"🔗 {context.user_data['url']}\n"
+            f"📄 {context.user_data['description']}\n"
+            f"📊 Max referrals: {max_claims}\n\n"
+            "Your link is now available for users to claim! 🎉\n"
+            "It will auto-delete when the limit is reached.\n\n"
+            "💡 Complete 3 more verified claims to unlock another free submission!"
+        )
+        
+        context.user_data.clear()
+        return ConversationHandler.END
     
-    return SUBMIT_DESCRIPTION
+    else:
+        # Paid submission - send invoice
+        plan = context.user_data['plan']
+        price = context.user_data['price']
+        max_claims = context.user_data['max_claims']
+        
+        await update.message.reply_invoice(
+            title=f"Submit Referral Link - {PLANS[plan]['name']}",
+            description=f"Pay {price} Telegram Stars to submit your referral link with up to {max_claims} referrals",
+            payload=f"submit_link_{update.effective_user.id}_{plan}",
+            provider_token="",  # Empty for Telegram Stars
+            currency="XTR",
+            prices=[LabeledPrice(f"Plan {plan}", price)]
+        )
+        
+        return SUBMIT_DESCRIPTION
 
 
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -705,11 +800,29 @@ async def approve_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Failed to notify referrer: {e}")
     
     # Send 3 Stars reward to the referred user
-    user_message = (
-        f"✅ Your claim has been approved!\n\n"
-        f"📊 Total verified claims: {total_claims}\n\n"
-        f"⭐ You've earned 3 Telegram Stars!"
-    )
+    # Build user message based on claim milestone
+    if total_claims < 3:
+        user_message = (
+            f"✅ Your claim has been approved!\n\n"
+            f"📊 Progress: {total_claims}/3 verified claims\n\n"
+            f"⭐ You've earned 3 Telegram Stars!\n\n"
+            f"💡 Complete {3 - total_claims} more claim(s) to unlock a FREE link submission!"
+        )
+    elif total_claims == 3:
+        user_message = (
+            f"🎉 Congratulations! Your claim has been approved!\n\n"
+            f"📊 Total verified claims: {total_claims}\n\n"
+            f"⭐ You've earned 3 Telegram Stars!\n\n"
+            f"🎁 MILESTONE REACHED! You've unlocked 1 FREE link submission!\n"
+            f"Use /submit_link and choose the FREE option to submit your referral link without paying Stars!"
+        )
+    else:
+        user_message = (
+            f"✅ Your claim has been approved!\n\n"
+            f"📊 Total verified claims: {total_claims}\n\n"
+            f"⭐ You've earned 3 Telegram Stars!\n\n"
+            f"Keep claiming to unlock more free submissions! (Every 3 claims = 1 free submission)"
+        )
     
     try:
         # Send reward invoice (3 Stars)
@@ -813,7 +926,7 @@ def main():
             CallbackQueryHandler(submit_link_start, pattern="^menu_submit$")
         ],
         states={
-            SUBMIT_PLAN: [CallbackQueryHandler(submit_plan_choice, pattern="^(plan_|submit_cancel)")],
+            SUBMIT_PLAN: [CallbackQueryHandler(submit_plan_choice, pattern="^(plan_A|plan_B|plan_C|plan_FREE|submit_cancel)")],
             SUBMIT_CATEGORY: [CallbackQueryHandler(submit_category, pattern="^(cat_|submit_cancel)")],
             SUBMIT_SERVICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, submit_service)],
             SUBMIT_URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, submit_url)],
