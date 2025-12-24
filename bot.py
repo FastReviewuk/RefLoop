@@ -971,6 +971,9 @@ def main():
             CommandHandler("cancel", cancel),
             CallbackQueryHandler(cancel, pattern="^submit_cancel$")
         ],
+        per_chat=False,
+        per_user=True,
+        per_message=False,
     )
     application.add_handler(submit_conv)
     
@@ -989,6 +992,9 @@ def main():
             CommandHandler("cancel", cancel),
             CallbackQueryHandler(cancel, pattern="^claim_cancel$")
         ],
+        per_chat=False,
+        per_user=True,
+        per_message=False,
     )
     application.add_handler(claim_conv)
     
