@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
 import os
 import logging
+from pathlib import Path
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
 from telegram.ext import (
@@ -14,8 +16,9 @@ from telegram.ext import (
 )
 import database as db
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from .env file
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_USER_IDS = [int(id.strip()) for id in os.getenv('ADMIN_USER_IDS', '').split(',') if id.strip()]

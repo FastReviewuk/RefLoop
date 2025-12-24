@@ -1,14 +1,19 @@
 import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 from contextlib import contextmanager
 
-DATABASE_URL = os.getenv('DATABASE_URL')
+def get_database_url():
+    """Get DATABASE_URL from environment"""
+    url = os.getenv('DATABASE_URL')
+    if not url:
+        raise ValueError("DATABASE_URL environment variable is not set")
+    return url
 
 @contextmanager
 def get_db_connection():
     """Context manager for database connections"""
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = psycopg.connect(get_database_url(), row_factory=dict_row)
     try:
         yield conn
         conn.commit()
@@ -97,7 +102,7 @@ def create_user(user_id: int, username: str):
 def get_user(user_id: int):
     """Get user by ID"""
     with get_db_connection() as conn:
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user = cursor.fetchone()
         cursor.close()
@@ -106,7 +111,7 @@ def get_user(user_id: int):
 def update_user_claims(user_id: int):
     """Increment user's verified claims and handle free submission unlock"""
     with get_db_connection() as conn:
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor()
         cursor.execute("""
             UPDATE users 
             SET total_verified_claims = total_verified_claims + 1
@@ -155,7 +160,7 @@ def create_referral_link(referrer_user_id: int, category: str, service_name: str
 def get_available_links(category: str = None):
     """Get available referral links (not maxed out)"""
     with get_db_connection() as conn:
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor()
         if category:
             cursor.execute("""
                 SELECT * FROM referral_links 
@@ -175,7 +180,7 @@ def get_available_links(category: str = None):
 def get_link_by_id(link_id: int):
     """Get referral link by ID"""
     with get_db_connection() as conn:
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor()
         cursor.execute("SELECT * FROM referral_links WHERE id = %s", (link_id,))
         link = cursor.fetchone()
         cursor.close()
@@ -184,7 +189,7 @@ def get_link_by_id(link_id: int):
 def increment_link_claims(link_id: int):
     """Increment current claims for a link and return updated values"""
     with get_db_connection() as conn:
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor()
         cursor.execute("""
             UPDATE referral_links 
             SET current_claims = current_claims + 1
@@ -231,7 +236,7 @@ def create_claim(referred_user_id: int, link_id: int, screenshot_file_id: str):
 def get_claim(claim_id: int):
     """Get claim by ID"""
     with get_db_connection() as conn:
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor()
         cursor.execute("SELECT * FROM claims WHERE id = %s", (claim_id,))
         claim = cursor.fetchone()
         cursor.close()
