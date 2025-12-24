@@ -223,11 +223,18 @@ async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     if query:
-        await query.message.reply_text(msg_text, reply_markup=reply_markup)
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=msg_text,
+            reply_markup=reply_markup
+        )
     else:
-        await update.message.reply_text(msg_text, reply_markup=reply_markup)
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=msg_text,
+            reply_markup=reply_markup
+        )
     
-    return SUBMIT_PLAN
     return SUBMIT_PLAN
 
 async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -236,16 +243,20 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
     
     if query.data == "submit_cancel":
-        await query.edit_message_text("❌ Submission cancelled.")
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text="❌ Submission cancelled."
+        )
         return ConversationHandler.END
     
     # Check if FREE plan
     if query.data == "plan_FREE":
         user_data = db.get_user(query.from_user.id)
         if user_data['free_submissions_available'] <= 0:
-            await query.edit_message_text(
-                "❌ You don't have any free submissions available.\n"
-                "Complete 3 verified claims to unlock free submission!"
+            await context.bot.send_message(
+                chat_id=CHANNEL_ID,
+                text="❌ You don't have any free submissions available.\n"
+                     "Complete 3 verified claims to unlock free submission!"
             )
             return ConversationHandler.END
         
@@ -269,9 +280,10 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
     keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="submit_cancel")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(
-        f"✅ Selected: {plan_name}\n\n"
-        "📂 Select a category for your referral link:",
+    await context.bot.send_message(
+        chat_id=CHANNEL_ID,
+        text=f"✅ Selected: {plan_name}\n\n"
+             "📂 Select a category for your referral link:",
         reply_markup=reply_markup
     )
     
@@ -283,15 +295,19 @@ async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "submit_cancel":
-        await query.edit_message_text("❌ Submission cancelled.")
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text="❌ Submission cancelled."
+        )
         return ConversationHandler.END
     
     cat_index = int(query.data.split('_')[1])
     context.user_data['category'] = CATEGORIES[cat_index]
     
-    await query.edit_message_text(
-        f"📂 Category: {CATEGORIES[cat_index]}\n\n"
-        "📝 Now, enter the service name (e.g., 'Binance', 'Uber', 'Coursera'):"
+    await context.bot.send_message(
+        chat_id=CHANNEL_ID,
+        text=f"📂 Category: {CATEGORIES[cat_index]}\n\n"
+             "📝 Now, enter the service name (e.g., 'Binance', 'Uber', 'Coursera'):"
     )
     
     return SUBMIT_SERVICE
@@ -300,9 +316,10 @@ async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle service name input"""
     context.user_data['service_name'] = update.message.text.strip()
     
-    await update.message.reply_text(
-        f"✅ Service: {context.user_data['service_name']}\n\n"
-        "🔗 Now, send your referral link URL:"
+    await context.bot.send_message(
+        chat_id=CHANNEL_ID,
+        text=f"✅ Service: {context.user_data['service_name']}\n\n"
+             "🔗 Now, send your referral link URL:"
     )
     
     return SUBMIT_URL
@@ -312,13 +329,17 @@ async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
     
     if not url.startswith(('http://', 'https://')):
-        await update.message.reply_text("❌ Please enter a valid URL starting with http:// or https://")
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text="❌ Please enter a valid URL starting with http:// or https://"
+        )
         return SUBMIT_URL
     
     context.user_data['url'] = url
     
-    await update.message.reply_text(
-        "📄 Finally, add a brief description (what users need to do):"
+    await context.bot.send_message(
+        chat_id=CHANNEL_ID,
+        text="📄 Finally, add a brief description (max 120 characters - what users need to do):"
     )
     
     return SUBMIT_DESCRIPTION
@@ -329,9 +350,10 @@ async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # Validate description length (max 120 characters)
     if len(description) > 120:
-        await update.message.reply_text(
-            f"❌ Description too long! ({len(description)}/120 characters)\n\n"
-            "Please send a shorter description (max 120 characters):"
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=f"❌ Description too long! ({len(description)}/120 characters)\n\n"
+                 "Please send a shorter description (max 120 characters):"
         )
         return SUBMIT_DESCRIPTION
     
@@ -357,34 +379,44 @@ async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE)
             max_claims
         )
         
-        await update.message.reply_text(
-            f"✅ Free submission successful! Link created! (ID: {link_id})\n\n"
-            f"📂 {context.user_data['category']}\n"
-            f"📝 {context.user_data['service_name']}\n"
-            f"🔗 {context.user_data['url']}\n"
-            f"📄 {context.user_data['description']}\n"
-            f"📊 Max referrals: {max_claims}\n\n"
-            "Your link is now available for users to claim! 🎉\n"
-            "It will auto-delete when the limit is reached.\n\n"
-            "💡 Complete 3 more verified claims to unlock another free submission!"
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=f"✅ Free submission successful! Link created! (ID: {link_id})\n\n"
+                 f"📂 {context.user_data['category']}\n"
+                 f"📝 {context.user_data['service_name']}\n"
+                 f"🔗 {context.user_data['url']}\n"
+                 f"📄 {context.user_data['description']}\n"
+                 f"📊 Max referrals: {max_claims}\n\n"
+                 "Your link is now available for users to claim! 🎉\n"
+                 "It will auto-delete when the limit is reached.\n\n"
+                 "💡 Complete 3 more verified claims to unlock another free submission!"
         )
         
         context.user_data.clear()
         return ConversationHandler.END
     
     else:
-        # Paid submission - send invoice
+        # Paid submission - send invoice to user in private chat
         plan = context.user_data['plan']
         price = context.user_data['price']
         max_claims = context.user_data['max_claims']
         
-        await update.message.reply_invoice(
+        # Send invoice to user's private chat
+        await context.bot.send_invoice(
+            chat_id=update.effective_user.id,
             title=f"Submit Referral Link - {PLANS[plan]['name']}",
             description=f"Pay {price} Telegram Stars to submit your referral link with up to {max_claims} referrals",
             payload=f"submit_link_{update.effective_user.id}_{plan}",
             provider_token="",  # Empty for Telegram Stars
             currency="XTR",
             prices=[LabeledPrice(f"Plan {plan}", price)]
+        )
+        
+        # Notify in channel
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=f"💳 Payment invoice sent to your private chat @{update.effective_user.username}!\n"
+                 f"Please complete the payment to submit your link."
         )
         
         return SUBMIT_DESCRIPTION
