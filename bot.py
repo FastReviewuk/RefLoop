@@ -979,7 +979,7 @@ def main():
         ],
         per_chat=False,
         per_user=True,
-        per_message=False,
+        per_message=True,
     )
     application.add_handler(submit_conv)
     
@@ -1000,7 +1000,7 @@ def main():
         ],
         per_chat=False,
         per_user=True,
-        per_message=False,
+        per_message=True,
     )
     application.add_handler(claim_conv)
     
