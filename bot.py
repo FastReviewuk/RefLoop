@@ -977,7 +977,7 @@ def main():
     application.add_handler(CallbackQueryHandler(submit_plan_choice, pattern="^plan_"))
     application.add_handler(CallbackQueryHandler(submit_category, pattern="^cat_"))
     application.add_handler(CallbackQueryHandler(cancel, pattern="^submit_cancel$"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.User(username=lambda u: u is not None), handle_text_input))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
     
     # Claim reward handlers (without ConversationHandler)  
     application.add_handler(CallbackQueryHandler(claim_category, pattern="^claim_cat_"))
