@@ -160,6 +160,8 @@ async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query if update.callback_query else None
     user = update.effective_user
     
+    logger.info(f"submit_link_start called by user {user.id} (@{user.username})")
+    
     if not user.username:
         msg = "❌ You need a public Telegram username to use this bot."
         if query:
@@ -242,6 +244,8 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     
+    logger.info(f"submit_plan_choice called by user {query.from_user.id} with data: {query.data}")
+    
     if query.data == "submit_cancel":
         await context.bot.send_message(
             chat_id=CHANNEL_ID,
@@ -273,6 +277,8 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data['price'] = PLANS[plan]['price']
         context.user_data['payment_method'] = 'paid'
         plan_name = PLANS[plan]['name']
+    
+    logger.info(f"Plan selected: {plan_name}, moving to SUBMIT_CATEGORY")
     
     # Show categories
     keyboard = [[InlineKeyboardButton(cat, callback_data=f"cat_{i}")] 
