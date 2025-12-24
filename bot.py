@@ -32,10 +32,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def get_user_data(context: ContextTypes.DEFAULT_TYPE, user_id: int):
-    """Get user data from application context"""
-    if user_id not in context.application.user_data:
-        context.application.user_data[user_id] = {}
-    return context.application.user_data[user_id]
+    """Get user data from bot context"""
+    if 'users' not in context.bot_data:
+        context.bot_data['users'] = {}
+    if user_id not in context.bot_data['users']:
+        context.bot_data['users'][user_id] = {}
+    return context.bot_data['users'][user_id]
 
 # Conversation states
 SUBMIT_PLAN, SUBMIT_CATEGORY, SUBMIT_SERVICE, SUBMIT_URL, SUBMIT_DESCRIPTION = range(5)
@@ -952,7 +954,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input based on current state"""
     user_id = update.effective_user.id
-    user_data = context.application.user_data.get(user_id, {})
+    user_data = get_user_data(context, user_id)
     user_state = user_data.get('state')
     
     logger.info(f"handle_text_input: user {user_id}, state: {user_state}, text: {update.message.text[:50] if update.message.text else 'None'}")
