@@ -813,13 +813,16 @@ def main():
             CallbackQueryHandler(submit_link_start, pattern="^menu_submit$")
         ],
         states={
-            SUBMIT_PLAN: [CallbackQueryHandler(submit_plan_choice)],
-            SUBMIT_CATEGORY: [CallbackQueryHandler(submit_category)],
+            SUBMIT_PLAN: [CallbackQueryHandler(submit_plan_choice, pattern="^(plan_|submit_cancel)")],
+            SUBMIT_CATEGORY: [CallbackQueryHandler(submit_category, pattern="^(cat_|submit_cancel)")],
             SUBMIT_SERVICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, submit_service)],
             SUBMIT_URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, submit_url)],
             SUBMIT_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, submit_description)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CallbackQueryHandler(cancel, pattern="^submit_cancel$")
+        ],
     )
     application.add_handler(submit_conv)
     
@@ -830,11 +833,14 @@ def main():
             CallbackQueryHandler(claim_reward_start_callback, pattern="^menu_claim$")
         ],
         states={
-            CLAIM_CATEGORY: [CallbackQueryHandler(claim_category)],
-            CLAIM_SERVICE: [CallbackQueryHandler(claim_service)],
+            CLAIM_CATEGORY: [CallbackQueryHandler(claim_category, pattern="^(claim_cat_|claim_cancel)")],
+            CLAIM_SERVICE: [CallbackQueryHandler(claim_service, pattern="^(claim_link_|claim_cancel)")],
             CLAIM_SCREENSHOT: [MessageHandler(filters.PHOTO, claim_screenshot)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CallbackQueryHandler(cancel, pattern="^claim_cancel$")
+        ],
     )
     application.add_handler(claim_conv)
     
