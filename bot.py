@@ -236,8 +236,6 @@ async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=msg_text,
             reply_markup=reply_markup
         )
-    
-    return SUBMIT_PLAN
 
 async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle plan selection including FREE option"""
@@ -251,7 +249,8 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
             chat_id=CHANNEL_ID,
             text="❌ Submission cancelled."
         )
-        return ConversationHandler.END
+        context.user_data.clear()
+        return
     
     # Check if FREE plan
     if query.data == "plan_FREE":
@@ -262,7 +261,8 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 text="❌ You don't have any free submissions available.\n"
                      "Complete 3 verified claims to unlock free submission!"
             )
-            return ConversationHandler.END
+            context.user_data.clear()
+            return
         
         context.user_data['plan'] = 'FREE'
         context.user_data['max_claims'] = 5  # Default for free
@@ -278,7 +278,7 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data['payment_method'] = 'paid'
         plan_name = PLANS[plan]['name']
     
-    logger.info(f"Plan selected: {plan_name}, moving to SUBMIT_CATEGORY")
+    logger.info(f"Plan selected: {plan_name}, moving to category selection")
     
     # Show categories
     keyboard = [[InlineKeyboardButton(cat, callback_data=f"cat_{i}")] 
@@ -292,8 +292,6 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
              "📂 Select a category for your referral link:",
         reply_markup=reply_markup
     )
-    
-    return SUBMIT_CATEGORY
 
 async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle category selection"""
@@ -305,30 +303,29 @@ async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=CHANNEL_ID,
             text="❌ Submission cancelled."
         )
-        return ConversationHandler.END
+        context.user_data.clear()
+        return
     
     cat_index = int(query.data.split('_')[1])
     context.user_data['category'] = CATEGORIES[cat_index]
+    context.user_data['state'] = 'SUBMIT_SERVICE'
     
     await context.bot.send_message(
         chat_id=CHANNEL_ID,
         text=f"📂 Category: {CATEGORIES[cat_index]}\n\n"
              "📝 Now, enter the service name (e.g., 'Binance', 'Uber', 'Coursera'):"
     )
-    
-    return SUBMIT_SERVICE
 
 async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle service name input"""
     context.user_data['service_name'] = update.message.text.strip()
+    context.user_data['state'] = 'SUBMIT_URL'
     
     await context.bot.send_message(
         chat_id=CHANNEL_ID,
         text=f"✅ Service: {context.user_data['service_name']}\n\n"
              "🔗 Now, send your referral link URL:"
     )
-    
-    return SUBMIT_URL
 
 async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle URL input"""
@@ -339,16 +336,15 @@ async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=CHANNEL_ID,
             text="❌ Please enter a valid URL starting with http:// or https://"
         )
-        return SUBMIT_URL
+        return
     
     context.user_data['url'] = url
+    context.user_data['state'] = 'SUBMIT_DESCRIPTION'
     
     await context.bot.send_message(
         chat_id=CHANNEL_ID,
         text="📄 Finally, add a brief description (max 120 characters - what users need to do):"
     )
-    
-    return SUBMIT_DESCRIPTION
 
 async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle description and send payment invoice or create free submission"""
@@ -361,9 +357,10 @@ async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE)
             text=f"❌ Description too long! ({len(description)}/120 characters)\n\n"
                  "Please send a shorter description (max 120 characters):"
         )
-        return SUBMIT_DESCRIPTION
+        return
     
     context.user_data['description'] = description
+    context.user_data['state'] = None  # Clear state
     
     # Check if this is a free submission
     payment_method = context.user_data.get('payment_method', 'paid')
@@ -399,7 +396,6 @@ async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         
         context.user_data.clear()
-        return ConversationHandler.END
     
     else:
         # Paid submission - send invoice to user in private chat
@@ -424,8 +420,6 @@ async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE)
             text=f"💳 Payment invoice sent to your private chat @{update.effective_user.username}!\n"
                  f"Please complete the payment to submit your link."
         )
-        
-        return SUBMIT_DESCRIPTION
 
 
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -939,9 +933,28 @@ async def reject_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancel conversation"""
-    await update.message.reply_text("❌ Operation cancelled.")
+    await context.bot.send_message(
+        chat_id=CHANNEL_ID,
+        text="❌ Operation cancelled."
+    )
     context.user_data.clear()
     return ConversationHandler.END
+
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle text input based on current state"""
+    user_state = context.user_data.get('state')
+    
+    logger.info(f"handle_text_input: user {update.effective_user.id}, state: {user_state}, text: {update.message.text[:50]}")
+    
+    if user_state == 'SUBMIT_SERVICE':
+        await submit_service(update, context)
+    elif user_state == 'SUBMIT_URL':
+        await submit_url(update, context)
+    elif user_state == 'SUBMIT_DESCRIPTION':
+        await submit_description(update, context)
+    else:
+        # No active state, ignore
+        logger.info(f"No active state for user {update.effective_user.id}, ignoring text input")
 
 def main():
     """Start the bot"""
@@ -960,49 +973,17 @@ def main():
     # Menu handlers
     application.add_handler(CallbackQueryHandler(menu_handler, pattern="^menu_"))
     
-    # Submit link conversation
-    submit_conv = ConversationHandler(
-        entry_points=[
-            CommandHandler("submit_link", submit_link_start),
-            CallbackQueryHandler(submit_link_start, pattern="^menu_submit$")
-        ],
-        states={
-            SUBMIT_PLAN: [CallbackQueryHandler(submit_plan_choice, pattern="^(plan_A|plan_B|plan_C|plan_FREE|submit_cancel)")],
-            SUBMIT_CATEGORY: [CallbackQueryHandler(submit_category, pattern="^(cat_|submit_cancel)")],
-            SUBMIT_SERVICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, submit_service)],
-            SUBMIT_URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, submit_url)],
-            SUBMIT_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, submit_description)],
-        },
-        fallbacks=[
-            CommandHandler("cancel", cancel),
-            CallbackQueryHandler(cancel, pattern="^submit_cancel$")
-        ],
-        per_chat=False,
-        per_user=True,
-        per_message=True,
-    )
-    application.add_handler(submit_conv)
+    # Submit link handlers (without ConversationHandler)
+    application.add_handler(CallbackQueryHandler(submit_plan_choice, pattern="^plan_"))
+    application.add_handler(CallbackQueryHandler(submit_category, pattern="^cat_"))
+    application.add_handler(CallbackQueryHandler(cancel, pattern="^submit_cancel$"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.User(username=lambda u: u is not None), handle_text_input))
     
-    # Claim reward conversation
-    claim_conv = ConversationHandler(
-        entry_points=[
-            CommandHandler("claim_reward", claim_reward_start),
-            CallbackQueryHandler(claim_reward_start_callback, pattern="^menu_claim$")
-        ],
-        states={
-            CLAIM_CATEGORY: [CallbackQueryHandler(claim_category, pattern="^(claim_cat_|claim_cancel)")],
-            CLAIM_SERVICE: [CallbackQueryHandler(claim_service, pattern="^(claim_link_|claim_cancel)")],
-            CLAIM_SCREENSHOT: [MessageHandler(filters.PHOTO, claim_screenshot)],
-        },
-        fallbacks=[
-            CommandHandler("cancel", cancel),
-            CallbackQueryHandler(cancel, pattern="^claim_cancel$")
-        ],
-        per_chat=False,
-        per_user=True,
-        per_message=True,
-    )
-    application.add_handler(claim_conv)
+    # Claim reward handlers (without ConversationHandler)  
+    application.add_handler(CallbackQueryHandler(claim_category, pattern="^claim_cat_"))
+    application.add_handler(CallbackQueryHandler(claim_service, pattern="^claim_link_"))
+    application.add_handler(CallbackQueryHandler(cancel, pattern="^claim_cancel$"))
+    application.add_handler(MessageHandler(filters.PHOTO, claim_screenshot))
     
     # Browse callback
     application.add_handler(CallbackQueryHandler(browse_category, pattern="^browse_cat_"))
