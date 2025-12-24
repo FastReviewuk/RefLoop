@@ -1,0 +1,136 @@
+═══════════════════════════════════════════════════════════════
+                    REFLOOP BOT - INFO DEPLOY
+═══════════════════════════════════════════════════════════════
+
+📋 INFORMAZIONI BOT
+═══════════════════════════════════════════════════════════════
+Bot Username:    @refloop_bot
+Bot Token:       8384270899:AAHkMQ05e4SdCEUablOqYKc5LUXEUFfMsQg
+Channel ID:      -1003625306083
+Channel Name:    RefLoop
+
+═══════════════════════════════════════════════════════════════
+🔧 VARIABILI D'AMBIENTE PER RENDER
+═══════════════════════════════════════════════════════════════
+
+1. BOT_TOKEN
+   8384270899:AAHkMQ05e4SdCEUablOqYKc5LUXEUFfMsQg
+
+2. DATABASE_URL
+   [Copia "Internal Database URL" dal database Render]
+   Esempio: postgresql://user:pass@host.render.com/db
+
+3. ADMIN_USER_IDS
+   [Il tuo Telegram User ID da @userinfobot]
+   Esempio: 123456789
+
+═══════════════════════════════════════════════════════════════
+⚙️ CONFIGURAZIONE RENDER
+═══════════════════════════════════════════════════════════════
+
+DATABASE:
+  Name:           refloop-db
+  Database:       refloop_db
+  Region:         Frankfurt
+  Plan:           Free
+
+WEB SERVICE:
+  Name:           refloop-bot
+  Environment:    Python 3
+  Region:         Frankfurt (STESSO del database!)
+  Build Command:  pip install -r requirements.txt
+  Start Command:  python bot.py
+  Plan:           Free
+
+═══════════════════════════════════════════════════════════════
+📱 SETUP TELEGRAM
+═══════════════════════════════════════════════════════════════
+
+1. Ottieni User ID:
+   - Cerca @userinfobot su Telegram
+   - Invia /start
+   - Copia il numero
+
+2. Configura Bot nel Canale:
+   - Apri canale RefLoop
+   - Aggiungi @refloop_bot come admin
+   - Permessi: Inviare, Modificare, Eliminare messaggi
+
+═══════════════════════════════════════════════════════════════
+🚀 LINK UTILI
+═══════════════════════════════════════════════════════════════
+
+Render Dashboard:     https://dashboard.render.com/
+GitHub:               https://github.com/
+Telegram Bot:         https://t.me/refloop_bot
+Canale RefLoop:       [Cerca "RefLoop" su Telegram]
+
+═══════════════════════════════════════════════════════════════
+📚 DOCUMENTAZIONE
+═══════════════════════════════════════════════════════════════
+
+DEPLOY_RENDER_GUIDA.md    - Guida completa passo-passo
+DEPLOY_CHECKLIST.md       - Checklist veloce
+QUICK_START.md            - Setup generale
+V2_SUMMARY.md             - Novità versione 2.0
+ADMIN_GUIDE.md            - Guida amministratore
+
+═══════════════════════════════════════════════════════════════
+✅ TEST FUNZIONAMENTO
+═══════════════════════════════════════════════════════════════
+
+1. Apri Telegram
+2. Cerca @refloop_bot
+3. Invia /start
+4. Verifica menu nel canale RefLoop con bottoni:
+   - 🔗 Submit Referral Link
+   - 🔍 Browse Links
+   - 🎁 Claim Reward
+   - 📊 My Status
+
+═══════════════════════════════════════════════════════════════
+💰 PIANI DISPONIBILI
+═══════════════════════════════════════════════════════════════
+
+Plan A:  5 referrals  → 25 Stars  (5.00 ⭐/ref)
+Plan B:  10 referrals → 40 Stars  (4.00 ⭐/ref)
+Plan C:  30 referrals → 100 Stars (3.33 ⭐/ref)
+
+Ricompensa: 3 Stars per ogni claim verificato
+
+═══════════════════════════════════════════════════════════════
+🎯 CATEGORIE
+═══════════════════════════════════════════════════════════════
+
+🎮 Games
+💰 Crypto
+🏦 Banks
+📱 Telecom
+📦 Other
+
+═══════════════════════════════════════════════════════════════
+⏱️ TEMPO STIMATO DEPLOY: 15 minuti
+═══════════════════════════════════════════════════════════════
+
+Passo 1: Preparazione (2 min)
+Passo 2: Account Render (1 min)
+Passo 3: GitHub (3 min)
+Passo 4: Database (2 min)
+Passo 5: Web Service (3 min)
+Passo 6: Variabili (2 min)
+Passo 7: Deploy (3-5 min)
+Passo 8: Test (1 min)
+
+═══════════════════════════════════════════════════════════════
+🆘 SUPPORTO
+═══════════════════════════════════════════════════════════════
+
+Problemi? Controlla:
+1. Log su Render Dashboard
+2. Variabili d'ambiente corrette
+3. Bot è admin nel canale
+4. Database nella stessa region del bot
+
+═══════════════════════════════════════════════════════════════
+                    BUON DEPLOY! 🚀⭐
+═══════════════════════════════════════════════════════════════
