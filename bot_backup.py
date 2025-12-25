@@ -29,25 +29,6 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_USER_IDS = [int(id.strip()) for id in os.getenv('ADMIN_USER_IDS', '').split(',') if id.strip()]
 CHANNEL_ID = -1003625306083  # RefLoop channel
 
-# Enable free submissions for promotion (set to False to re-enable payments)
-FREE_PROMOTION_MODE = True
-
-# Categories for referral links
-CATEGORIES = [
-    "🎮 Games",
-    "💰 Crypto", 
-    "🏦 Banks",
-    "📱 Telecom",
-    "📦 Other"
-]
-
-# Pricing plans (all FREE in promotion mode)
-PLANS = {
-    'A': {'max_claims': 10, 'price': 0, 'name': 'FREE Plan A - 10 Referrals'},
-    'B': {'max_claims': 10, 'price': 0, 'name': 'FREE Plan B - 10 Referrals'}, 
-    'C': {'max_claims': 10, 'price': 0, 'name': 'FREE Plan C - 10 Referrals'}
-}
-
 # Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -67,6 +48,25 @@ def get_user_data(context: ContextTypes.DEFAULT_TYPE, user_id: int):
 SUBMIT_PLAN, SUBMIT_CATEGORY, SUBMIT_SERVICE, SUBMIT_URL, SUBMIT_DESCRIPTION = range(5)
 CLAIM_CATEGORY, CLAIM_SERVICE, CLAIM_SCREENSHOT = range(5, 8)
 
+# Enable free submissions for promotion (set to False to re-enable payments)
+FREE_PROMOTION_MODE = True
+
+# Categories for referral links
+CATEGORIES = [
+    "🎮 Games",
+    "💰 Crypto", 
+    "🏦 Banks",
+    "📱 Telecom",
+    "📦 Other"
+]
+
+# Pricing plans (all FREE in promotion mode)
+PLANS = {
+    'A': {'max_claims': 10, 'price': 0, 'name': 'FREE Plan A - 10 Referrals'},
+    'B': {'max_claims': 10, 'price': 0, 'name': 'FREE Plan B - 10 Referrals'}, 
+    'C': {'max_claims': 10, 'price': 0, 'name': 'FREE Plan C - 10 Referrals'}
+}
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler - Register user and show menu in channel"""
     user = update.effective_user
@@ -82,68 +82,98 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Create user in database (auto-registration)
     db.create_user(user.id, user.username)
     
-    # Handle deep links
-    if context.args:
+    # Check if this is a deep link for submission continuation
+    if context.args and len(context.args) > 0:
         arg = context.args[0]
-        
-        # Handle claim deep links
-        if arg.startswith('claim_'):
-            link_id = int(arg.split('_')[1])
-            link = db.get_link_by_id(link_id)
-            
-            if not link:
-                await update.message.reply_text("❌ This referral link is no longer active.")
-                return
-            
-            await update.message.reply_text(
-                f"📸 **Submit Screenshot for Claim**\n\n"
-                f"🔗 **Service:** {link['service_name']}\n"
-                f"📄 **Task:** {link['description']}\n\n"
-                "Please send a screenshot showing you completed the sign-up.\n\n"
-                "📋 **Instructions:**\n"
-                "• Screenshot must show confirmation email or welcome screen\n"
-                "• Make sure your username/email is visible\n"
-                "• Send the image directly to this chat\n\n"
-                "⏳ Your claim will be reviewed by an admin.",
-                parse_mode='Markdown'
-            )
-            
-            # Store claim info for screenshot handler
-            user_data = get_user_data(context, user.id)
-            user_data['claim_link_id'] = link_id
-            return
         
         # Handle complete submission flow in private chat
         if arg == 'submit_flow':
             await start_private_submission_flow(update, context, user)
             return
+        
+        # Handle submission deep link (legacy)
+        elif arg == 'submit':
+            submission_state = db.get_submission_state(user.id)
+            
+            if submission_state and submission_state.get('state') == 'SUBMIT_SERVICE':
+                await update.message.reply_text(
+                    f"✅ Great! Let's continue your submission.\n\n"
+                    f"📂 Category: {submission_state['category']}\n"
+                    f"💰 Plan: {submission_state['plan']}\n\n"
+                    "📝 Step 1/3: Enter the service name\n"
+                    "(e.g., 'Binance', 'Uber', 'Coursera')"
+                )
+                return
+        
+        # Handle claim screenshot deep link
+        elif arg.startswith('claim_'):
+            link_id = int(arg.split('_')[1])
+            link = db.get_link_by_id(link_id)
+            
+            if link:
+                # Store claim link in user data
+                user_data_context = get_user_data(context, user.id)
+                user_data_context['claim_link_id'] = link_id
+                user_data_context['state'] = 'CLAIM_SCREENSHOT'
+                
+                await update.message.reply_text(
+                    f"📸 **Ready to submit your claim!**\n\n"
+                    f"🔗 Service: {link['service_name']}\n"
+                    f"📂 Category: {link['category']}\n\n"
+                    "Please send your screenshot now as a photo.\n\n"
+                    "⚠️ Make sure the screenshot shows:\n"
+                    "• Confirmation of sign-up\n"
+                    "• Your username/email visible\n"
+                    "• Clear and readable",
+                    parse_mode='Markdown'
+                )
+                return
+            else:
+                await update.message.reply_text("❌ This referral link is no longer available.")
+                return
     
-    # Show main menu in channel
+    # Get user data to show current status
+    user_data = db.get_user(user.id)
+    verified_claims = user_data['total_verified_claims']
+    
+    # Create main menu keyboard
     keyboard = [
         [InlineKeyboardButton("📊 My Status", callback_data="menu_status")],
-        [InlineKeyboardButton("📋 Browse Links", callback_data="menu_browse")],
-        [InlineKeyboardButton("🔗 Submit Link", callback_data="menu_submit")],
-        [InlineKeyboardButton("🎁 Claim Reward", callback_data="menu_claim")]
+        [InlineKeyboardButton("🔍 Browse Available Links", callback_data="menu_browse")],
+        [InlineKeyboardButton("🔗 Submit Referral Link", callback_data="menu_submit")],
+        [InlineKeyboardButton("🎁 Claim Reward", callback_data="menu_claim")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     welcome_text = (
-        f"🎉 Welcome to RefLoop, @{user.username}!\n\n"
-        "🔗 **Submit** your referral links\n"
-        "🎁 **Claim** rewards from others\n"
-        "⭐ **Earn** Telegram Stars\n\n"
+        f"👋 Welcome to RefLoop, @{user.username}!\n\n"
+        "🔗 Share referral links and earn Telegram Stars!\n\n"
+        "📋 How it works:\n"
+        "• Complete 3 verified sign-ups to unlock FREE link submission\n"
+        "• OR pay Stars to submit immediately (25/40/100 ⭐)\n"
+        "• Earn 3 ⭐ for each verified claim you complete\n\n"
+        "💰 Pricing Plans:\n"
+        "• Plan A: 5 referrals → 25 ⭐\n"
+        "• Plan B: 10 referrals → 40 ⭐\n"
+        "• Plan C: 30 referrals → 100 ⭐\n\n"
+        f"📊 Your Status: {verified_claims}/3 claims completed\n\n"
         "Choose an option below:"
     )
     
-    if update.message.chat.type == 'private':
-        await update.message.reply_text(welcome_text, reply_markup=reply_markup)
-    else:
-        # In channel, send to channel
+    # Post to channel
+    try:
         await context.bot.send_message(
             chat_id=CHANNEL_ID,
             text=welcome_text,
             reply_markup=reply_markup
         )
+        await update.message.reply_text(
+            "✅ Welcome! Check the RefLoop channel for the main menu."
+        )
+    except Exception as e:
+        logger.error(f"Failed to post to channel: {e}")
+        # Fallback: send to user directly
+        await update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
 async def start_private_submission_flow(update, context, user):
     """Start complete submission flow in private chat"""
@@ -197,35 +227,26 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await my_status_callback(update, context)
 
 async def my_status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show user status (callback version)"""
+    """Show user's current status (callback version)"""
     query = update.callback_query
     user = query.from_user
     
     user_data = db.get_user(user.id)
+    
     if not user_data:
-        await query.message.reply_text("❌ Please use /start first.")
+        await query.message.reply_text("❌ User not found. Please use /start first.")
         return
     
-    verified_claims = user_data['total_verified_claims']
-    free_available = user_data['free_submissions_available']
-    
-    # Count user's active links
-    user_links = db.get_user_links(user.id)
-    active_links = len([link for link in user_links if link['current_claims'] < link['max_claims']])
+    total_claims = user_data['total_verified_claims']
     
     status_msg = (
-        f"📊 **Status for @{user.username}**\n\n"
-        f"✅ **Verified Claims:** {verified_claims}\n"
-        f"🎁 **Free Submissions Available:** {free_available}\n"
-        f"🔗 **Active Links:** {active_links}\n\n"
-        f"💡 **Progress to next free submission:** {verified_claims % 3}/3\n\n"
-        "🎯 **How it works:**\n"
-        "• Complete 3 verified claims = 1 free submission\n"
-        "• Each verified claim earns you 3 ⭐\n"
-        "• Submit links to earn more claims!"
+        f"📊 Your Status:\n\n"
+        f"✅ Verified claims: {total_claims}\n"
+        f"⭐ You earn 3 Stars per verified claim!\n\n"
+        f"💡 Keep claiming to earn more Stars!"
     )
     
-    await query.message.reply_text(status_msg, parse_mode='Markdown')
+    await query.message.reply_text(status_msg)
 
 async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Redirect user to private chat for complete submission flow"""
@@ -253,10 +274,10 @@ async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=CHANNEL_ID,
         text=f"✅ @{user.username}, click the button below to submit your referral link:\n\n"
              "📝 You'll be guided through:\n"
-             "1️⃣ Choose your plan (A/B/C - all FREE!)\n"
+             "1️⃣ Choose your plan (A/B/C or FREE)\n"
              "2️⃣ Select category\n"
              "3️⃣ Enter service details\n"
-             "4️⃣ Link created automatically!",
+             "4️⃣ Complete payment or use free submission",
         reply_markup=reply_markup
     )
 
@@ -342,7 +363,7 @@ async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"✅ Service: {user_data['service_name']}\n\n"
-        "🔗 **Step 3/4:** Send your referral link URL\n"
+        "📝 Step 2/3: Send your referral link URL\n"
         "(Must start with http:// or https://)"
     )
 
@@ -353,11 +374,8 @@ async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     url = update.message.text.strip()
     
-    # Validate URL
-    if not (url.startswith('http://') or url.startswith('https://')):
-        await update.message.reply_text(
-            "❌ Invalid URL! Please send a valid URL starting with http:// or https://"
-        )
+    if not url.startswith(('http://', 'https://')):
+        await update.message.reply_text("❌ Please enter a valid URL starting with http:// or https://")
         return
     
     user_data['url'] = url
@@ -367,14 +385,13 @@ async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.save_submission_state(user_id, state='SUBMIT_DESCRIPTION', url=url)
     
     await update.message.reply_text(
-        f"✅ URL: {url}\n\n"
-        "📝 **Step 4/4:** Enter a description\n"
-        "(What should users do? Max 120 characters)\n\n"
-        "Example: 'Sign up and verify your email'"
+        "✅ URL saved!\n\n"
+        "📝 Step 3/3: Add a brief description (max 120 characters)\n"
+        "Tell users what they need to do (e.g., 'Sign up and verify email')"
     )
 
 async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle description and create free submission"""
+    """Handle description and send payment invoice or create free submission"""
     user_id = update.message.from_user.id if update.message and update.message.from_user else update.effective_user.id
     
     # Get submission state from database
@@ -402,41 +419,124 @@ async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE)
     max_claims = submission_state['max_claims']
     
     # In promotional mode, all submissions are free
-    link_id = db.create_referral_link(
-        user_id,
-        submission_state['category'],
-        submission_state['service_name'],
-        submission_state['url'],
-        description,
-        max_claims
-    )
-    
-    # Send success message in private chat
-    await update.message.reply_text(
-        f"✅ **FREE**: Link submitted successfully! (ID: {link_id})\n\n"
-        f"📂 {submission_state['category']}\n"
-        f"📝 {submission_state['service_name']}\n"
-        f"🔗 {submission_state['url']}\n"
-        f"📄 {description}\n"
-        f"📊 Max referrals: {max_claims}\n\n"
-        "🎉 Your link is now available for users to claim!\n"
-        "It will auto-delete when the limit is reached.",
-        parse_mode='Markdown'
-    )
-    
-    # Also notify in channel
-    await context.bot.send_message(
-        chat_id=CHANNEL_ID,
-        text=f"✅ New link submitted by @{update.effective_user.username}!\n\n"
-             f"📂 {submission_state['category']}\n"
-             f"📝 {submission_state['service_name']}\n"
-             f"📊 Max referrals: {max_claims}"
-    )
-    
-    # Clear submission state
-    db.clear_submission_state(user_id)
+    if FREE_PROMOTION_MODE or plan == 'FREE' or plan == 'PROMO':
+        # Create link directly without payment
+        link_id = db.create_referral_link(
+            user_id,
+            submission_state['category'],
+            submission_state['service_name'],
+            submission_state['url'],
+            description,
+            max_claims
+        )
+        
+        # Send success message in private chat
+        await update.message.reply_text(
+            f"✅ **FREE**: Link submitted successfully! (ID: {link_id})\n\n"
+            f"📂 {submission_state['category']}\n"
+            f"📝 {submission_state['service_name']}\n"
+            f"🔗 {submission_state['url']}\n"
+            f"📄 {description}\n"
+            f"📊 Max referrals: {max_claims}\n\n"
+            "🎉 Your link is now available for users to claim!\n"
+            "It will auto-delete when the limit is reached.",
+            parse_mode='Markdown'
+        )
+        
+        # Also notify in channel
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=f"✅ New link submitted by @{update.effective_user.username}!\n\n"
+                 f"📂 {submission_state['category']}\n"
+                 f"📝 {submission_state['service_name']}\n"
+                 f"📊 Max referrals: {max_claims}"
+        )
+        
+        # Clear submission state
+        db.clear_submission_state(user_id)
+        
+    else:
+        # This shouldn't happen in promotional mode, but just in case
+        await update.message.reply_text(
+            "❌ Something went wrong. Please try again or contact support."
+        )
 
-# Add other essential functions here...
+
+async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle pre-checkout query"""
+    query = update.pre_checkout_query
+    await query.answer(ok=True)
+
+async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle successful payment"""
+    payment = update.message.successful_payment
+    
+    if payment.invoice_payload.startswith("submit_link_"):
+        # Extract plan from payload
+        parts = payment.invoice_payload.split('_')
+        plan = parts[-1] if len(parts) > 2 else 'A'
+        max_claims = context.user_data.get('max_claims', PLANS[plan]['max_claims'])
+        
+        # Create the referral link after payment
+        link_id = db.create_referral_link(
+            update.effective_user.id,
+            user_data['category'],
+            user_data['service_name'],
+            user_data['url'],
+            user_data['description'],
+            max_claims
+        )
+        
+        await update.message.reply_text(
+            f"✅ Payment received! Link submitted successfully! (ID: {link_id})\n\n"
+            f"📂 {user_data['category']}\n"
+            f"📝 {user_data['service_name']}\n"
+            f"🔗 {user_data['url']}\n"
+            f"📊 Max referrals: {max_claims}\n\n"
+            "Your link is now available for users to claim! 🎉\n"
+            "It will auto-delete when the limit is reached."
+        )
+        
+        context.user_data.clear()
+    
+    elif payment.invoice_payload.startswith("reward_"):
+        # Reward payment completed (3 Stars)
+        claim_id = int(payment.invoice_payload.split('_')[1])
+        db.mark_claim_rewarded(claim_id)
+        
+        await update.message.reply_text(
+            "⭐ Congratulations! You've received 3 Telegram Stars!\n\n"
+            "Keep claiming more rewards to earn more Stars! 💰"
+        )
+
+async def browse_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Browse available referral links"""
+    user = update.effective_user
+    
+    if not user.username:
+        await update.message.reply_text("❌ You need a public username to use this bot.")
+        return
+    
+    # Get all categories with available links
+    categories = db.get_categories()
+    
+    if not categories:
+        await update.message.reply_text(
+            "📭 No referral links available yet.\n\n"
+            "Be the first to submit one with /submit_link!"
+        )
+        return
+    
+    keyboard = [[InlineKeyboardButton(cat, callback_data=f"browse_cat_{i}")] 
+                for i, cat in enumerate(categories)]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        "🔍 Browse Referral Links\n\n"
+        "Select a category:",
+        reply_markup=reply_markup
+    )
+
 async def browse_links_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Browse available referral links (callback version)"""
     query = update.callback_query
@@ -497,9 +597,43 @@ async def browse_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🔗 {link['url']}\n\n"
         )
     
-    message += "Use the Claim Reward button to claim a reward!"
+    message += "Use /claim_reward to claim a reward!"
     
     await query.edit_message_text(message)
+
+async def claim_reward_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start claim reward process"""
+    user = update.effective_user
+    
+    if not user.username:
+        await update.message.reply_text("❌ You need a public username to use this bot.")
+        return
+    
+    user_data = db.get_user(user.id)
+    if not user_data:
+        await update.message.reply_text("❌ Please use /start first.")
+        return
+    
+    # Get all categories with available links
+    categories = db.get_categories()
+    
+    if not categories:
+        await update.message.reply_text(
+            "📭 No referral links available to claim.\n\n"
+            "Check back later!"
+        )
+        return
+    
+    keyboard = [[InlineKeyboardButton(cat, callback_data=f"claim_cat_{i}")] 
+                for i, cat in enumerate(categories)]
+    keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="claim_cancel")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        "🎁 Claim a Reward\n\n"
+        "Select a category:",
+        reply_markup=reply_markup
+    )
 
 async def claim_reward_start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start claim reward process (callback version)"""
@@ -693,6 +827,172 @@ async def claim_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     user_data.clear()
+    return
+
+async def approve_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to approve a claim"""
+    if update.effective_user.id not in ADMIN_USER_IDS:
+        await update.message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    if not context.args or len(context.args) != 1:
+        await update.message.reply_text("Usage: /approve <claim_id>")
+        return
+    
+    try:
+        claim_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid claim ID.")
+        return
+    
+    claim = db.get_claim(claim_id)
+    
+    if not claim:
+        await update.message.reply_text("❌ Claim not found.")
+        return
+    
+    if claim['status'] != 'pending':
+        await update.message.reply_text(f"❌ Claim is already {claim['status']}.")
+        return
+    
+    # Verify the linked referral still exists
+    link = db.get_link_by_id(claim['link_id'])
+    if not link:
+        await update.message.reply_text("❌ The referral link no longer exists.")
+        db.reject_claim(claim_id)
+        return
+    
+    # Safety check: ensure link hasn't reached max claims
+    if link['current_claims'] >= link['max_claims']:
+        await update.message.reply_text("❌ This link has already reached its maximum claims.")
+        db.reject_claim(claim_id)
+        return
+    
+    # Approve the claim
+    db.approve_claim(claim_id)
+    
+    # Update user's verified claims count
+    total_claims = db.update_user_claims(claim['referred_user_id'])
+    
+    # Increment link's current claims and get updated values
+    link_update = db.increment_link_claims(claim['link_id'])
+    
+    # Check if link reached its limit and delete if so
+    link_deleted = False
+    if link_update and link_update['current_claims'] >= link_update['max_claims']:
+        # Link reached limit - delete it
+        db.delete_referral_link(claim['link_id'])
+        link_deleted = True
+        
+        # Notify the referrer
+        try:
+            await context.bot.send_message(
+                chat_id=link_update['referrer_user_id'],
+                text=(
+                    f"✅ Your link for {link_update['service_name']} has reached its limit "
+                    f"of {link_update['max_claims']} referrals and has been removed.\n\n"
+                    "Thank you for using RefLoop! 🎉"
+                )
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify referrer: {e}")
+    
+    # Send 3 Stars reward to the referred user
+    # Build user message based on claim milestone
+    if total_claims < 3:
+        user_message = (
+            f"✅ Your claim has been approved!\n\n"
+            f"📊 Progress: {total_claims}/3 verified claims\n\n"
+            f"⭐ You've earned 3 Telegram Stars!\n\n"
+            f"💡 Complete {3 - total_claims} more claim(s) to unlock a FREE link submission!"
+        )
+    elif total_claims == 3:
+        user_message = (
+            f"🎉 Congratulations! Your claim has been approved!\n\n"
+            f"📊 Total verified claims: {total_claims}\n\n"
+            f"⭐ You've earned 3 Telegram Stars!\n\n"
+            f"🎁 MILESTONE REACHED! You've unlocked 1 FREE link submission!\n"
+            f"Use /submit_link and choose the FREE option to submit your referral link without paying Stars!"
+        )
+    else:
+        user_message = (
+            f"✅ Your claim has been approved!\n\n"
+            f"📊 Total verified claims: {total_claims}\n\n"
+            f"⭐ You've earned 3 Telegram Stars!\n\n"
+            f"Keep claiming to unlock more free submissions! (Every 3 claims = 1 free submission)"
+        )
+    
+    try:
+        # Send reward invoice (3 Stars)
+        await context.bot.send_invoice(
+            chat_id=claim['referred_user_id'],
+            title="Claim Reward",
+            description="You've earned 3 Telegram Stars for your verified claim!",
+            payload=f"reward_{claim_id}",
+            provider_token="",
+            currency="XTR",
+            prices=[LabeledPrice("Claim Reward", 3)]
+        )
+        
+        await context.bot.send_message(
+            chat_id=claim['referred_user_id'],
+            text=user_message
+        )
+    except Exception as e:
+        logger.error(f"Failed to send reward or notify user: {e}")
+    
+    # Notify admin
+    admin_msg = (
+        f"✅ Claim {claim_id} approved!\n"
+        f"User now has {total_claims} verified claims.\n"
+        f"Link claims: {link_update['current_claims']}/{link_update['max_claims']}"
+    )
+    
+    if link_deleted:
+        admin_msg += f"\n🗑️ Link {claim['link_id']} auto-deleted (limit reached)"
+    
+    await update.message.reply_text(admin_msg)
+
+async def reject_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to reject a claim"""
+    if update.effective_user.id not in ADMIN_USER_IDS:
+        await update.message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    if not context.args or len(context.args) != 1:
+        await update.message.reply_text("Usage: /reject <claim_id>")
+        return
+    
+    try:
+        claim_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid claim ID.")
+        return
+    
+    claim = db.get_claim(claim_id)
+    
+    if not claim:
+        await update.message.reply_text("❌ Claim not found.")
+        return
+    
+    if claim['status'] != 'pending':
+        await update.message.reply_text(f"❌ Claim is already {claim['status']}.")
+        return
+    
+    # Reject the claim
+    db.reject_claim(claim_id)
+    
+    # Notify user
+    try:
+        await context.bot.send_message(
+            chat_id=claim['referred_user_id'],
+            text="❌ Your claim has been rejected.\n\n"
+                 "Please make sure to follow the instructions correctly and submit valid proof."
+        )
+    except Exception as e:
+        logger.error(f"Failed to notify user: {e}")
+    
+    await update.message.reply_text(f"✅ Claim {claim_id} rejected.")
 
 async def test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to simulate a payment for testing"""
@@ -711,7 +1011,14 @@ async def test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Simulate successful payment
     plan = submission_state['plan']
-    max_claims = submission_state.get('max_claims', PLANS[plan]['max_claims'])
+    
+    # Handle promotional plan
+    if plan == 'PROMO':
+        max_claims = 10
+    elif plan == 'FREE':
+        max_claims = 5
+    else:
+        max_claims = submission_state.get('max_claims', PLANS[plan]['max_claims'])
     
     # Create the referral link
     link_id = db.create_referral_link(
@@ -746,116 +1053,21 @@ async def test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Clear submission state from database
     db.clear_submission_state(user_id)
 
-async def approve_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command to approve a claim"""
+async def toggle_promo_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to toggle promotional mode"""
     if update.effective_user.id not in ADMIN_USER_IDS:
         await update.message.reply_text("❌ You don't have permission to use this command.")
         return
     
-    if not context.args or len(context.args) != 1:
-        await update.message.reply_text("Usage: /approve <claim_id>")
-        return
+    global FREE_PROMOTION_MODE
+    FREE_PROMOTION_MODE = not FREE_PROMOTION_MODE
     
-    try:
-        claim_id = int(context.args[0])
-    except ValueError:
-        await update.message.reply_text("❌ Invalid claim ID. Please provide a number.")
-        return
-    
-    # Get claim details
-    claim = db.get_claim_by_id(claim_id)
-    if not claim:
-        await update.message.reply_text(f"❌ Claim {claim_id} not found.")
-        return
-    
-    if claim['status'] != 'pending':
-        await update.message.reply_text(f"❌ Claim {claim_id} is already {claim['status']}.")
-        return
-    
-    # Approve the claim
-    db.approve_claim(claim_id)
-    
-    # Update link claims count
-    db.increment_link_claims(claim['link_id'])
-    
-    # Update user's verified claims count
-    db.increment_user_verified_claims(claim['referred_user_id'])
-    
-    # Check if user reached milestone (every 3 claims = 1 free submission)
-    user_data = db.get_user(claim['referred_user_id'])
-    verified_claims = user_data['total_verified_claims']
-    
-    if verified_claims % 3 == 0:
-        # Grant free submission
-        db.add_free_submission(claim['referred_user_id'])
-        
-        # Notify user about milestone
-        try:
-            await context.bot.send_message(
-                chat_id=claim['referred_user_id'],
-                text=f"🎉 **Milestone Reached!**\n\n"
-                     f"You've completed {verified_claims} verified claims!\n"
-                     f"🎁 You've unlocked 1 FREE submission (5 referrals)\n\n"
-                     f"Use the Submit Link button to use your free submission!"
-            )
-        except Exception as e:
-            logger.error(f"Failed to notify user {claim['referred_user_id']}: {e}")
-    
-    # Notify user about approval
-    try:
-        await context.bot.send_message(
-            chat_id=claim['referred_user_id'],
-            text=f"✅ Your claim has been approved!\n\n"
-                 f"🎁 You earned 3 ⭐ Telegram Stars!\n"
-                 f"📊 Total verified claims: {verified_claims}\n\n"
-                 f"Keep claiming to unlock free submissions!"
-        )
-    except Exception as e:
-        logger.error(f"Failed to notify user {claim['referred_user_id']}: {e}")
-    
-    await update.message.reply_text(f"✅ Claim {claim_id} approved.")
-
-async def reject_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command to reject a claim"""
-    if update.effective_user.id not in ADMIN_USER_IDS:
-        await update.message.reply_text("❌ You don't have permission to use this command.")
-        return
-    
-    if not context.args or len(context.args) != 1:
-        await update.message.reply_text("Usage: /reject <claim_id>")
-        return
-    
-    try:
-        claim_id = int(context.args[0])
-    except ValueError:
-        await update.message.reply_text("❌ Invalid claim ID. Please provide a number.")
-        return
-    
-    # Get claim details
-    claim = db.get_claim_by_id(claim_id)
-    if not claim:
-        await update.message.reply_text(f"❌ Claim {claim_id} not found.")
-        return
-    
-    if claim['status'] != 'pending':
-        await update.message.reply_text(f"❌ Claim {claim_id} is already {claim['status']}.")
-        return
-    
-    # Reject the claim
-    db.reject_claim(claim_id)
-    
-    # Notify user about rejection
-    try:
-        await context.bot.send_message(
-            chat_id=claim['referred_user_id'],
-            text=f"❌ Your claim has been rejected.\n\n"
-                 f"Please make sure to follow the instructions correctly and submit valid proof.\n\n"
-                 f"You can try claiming other referral links!"
-        )
-    except Exception as e:
-        logger.error(f"Failed to notify user {claim['referred_user_id']}: {e}")
-    
-    await update.message.reply_text(f"✅ Claim {claim_id} rejected.")
+    status = "🟢 ENABLED" if FREE_PROMOTION_MODE else "🔴 DISABLED"
+    await update.message.reply_text(
+        f"🎉 **Promotional Mode {status}**\n\n"
+        f"{'All submissions are now FREE (10 referrals each)!' if FREE_PROMOTION_MODE else 'Normal payment mode restored.'}\n\n"
+        f"Current mode: {'Promotional' if FREE_PROMOTION_MODE else 'Normal'}"
+    )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancel conversation"""
@@ -864,6 +1076,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text="❌ Operation cancelled."
     )
     context.user_data.clear()
+    return
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input based on current state"""
@@ -876,39 +1089,36 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.warning("No user found in update, ignoring")
         return
     
-    # Get submission state from database
-    submission_state = db.get_submission_state(user_id)
+    user_data = get_user_data(context, user_id)
+    user_state = user_data.get('state')
     
-    if not submission_state:
-        # No active submission, check if it's a screenshot for claim
-        user_data = get_user_data(context, user_id)
-        if user_data.get('claim_link_id') and update.message.photo:
-            await claim_screenshot(update, context)
-        return
+    logger.info(f"handle_text_input: user {user_id}, state: {user_state}, text: {update.message.text[:50] if update.message and update.message.text else 'None'}")
     
-    state = submission_state.get('state')
-    
-    if state == 'SUBMIT_SERVICE':
+    if user_state == 'SUBMIT_SERVICE':
         await submit_service(update, context)
-    elif state == 'SUBMIT_URL':
+    elif user_state == 'SUBMIT_URL':
         await submit_url(update, context)
-    elif state == 'SUBMIT_DESCRIPTION':
+    elif user_state == 'SUBMIT_DESCRIPTION':
         await submit_description(update, context)
+    else:
+        # No active state, ignore
+        logger.info(f"No active state for user {user_id}, ignoring text input")
 
 def main():
-    """Main function to run the bot"""
-    if not BOT_TOKEN:
-        print("Error: BOT_TOKEN not found in environment variables")
-        return
+    """Start the bot"""
+    # Initialize database
+    db.init_database()
     
     # Create application
     application = Application.builder().token(BOT_TOKEN).build()
     
     # Command handlers
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("browse", browse_links))
     application.add_handler(CommandHandler("approve", approve_claim))
     application.add_handler(CommandHandler("reject", reject_claim))
     application.add_handler(CommandHandler("test_payment", test_payment))
+    application.add_handler(CommandHandler("toggle_promo", toggle_promo_mode))
     application.add_handler(CommandHandler("admin", admin_menu.show_admin_menu))
     application.add_handler(CommandHandler("dashboard", admin_dashboard.show_dashboard))
     application.add_handler(CommandHandler("claims", admin_claims.list_claims))
@@ -934,34 +1144,46 @@ def main():
     application.add_handler(CallbackQueryHandler(claim_category, pattern="^claim_cat_"))
     application.add_handler(CallbackQueryHandler(claim_service, pattern="^claim_link_"))
     application.add_handler(CallbackQueryHandler(cancel, pattern="^claim_cancel$"))
+    application.add_handler(MessageHandler(filters.PHOTO, claim_screenshot))
     
     # Browse callback
     application.add_handler(CallbackQueryHandler(browse_category, pattern="^browse_cat_"))
     
-    # Initialize database
-    db.init_database()
+    # Payment handlers
+    application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
     
-    # Check if running on Render (webhook mode) or locally (polling mode)
-    render_url = os.getenv('RENDER_EXTERNAL_URL')
+    # Start bot
+    logger.info("Bot started!")
     
-    if render_url:
-        # Webhook mode for Render
-        webhook_url = f"{render_url}/webhook"
-        logger.info(f"Starting webhook mode with URL: {webhook_url}")
+    # Use webhook for Render deployment
+    webhook_url = os.getenv('RENDER_EXTERNAL_URL')
+    port = int(os.getenv('PORT', 10000))
+    
+    if webhook_url:
+        # Production mode with webhook
+        logger.info(f"Starting webhook mode on {webhook_url}")
         
-        # Start keep-alive system
-        keep_alive = KeepAlive(render_url)
-        application.post_init = keep_alive.start
+        # Setup keep-alive as background task
+        # Note: We ping the root URL since we can't add custom routes easily
+        async def post_init(app: Application):
+            """Initialize keep-alive after application starts"""
+            keep_alive = KeepAlive(webhook_url, interval=840)
+            keep_alive.start()
+            logger.info("🔄 Keep-alive system activated (pinging root URL)")
+        
+        application.post_init = post_init
         
         application.run_webhook(
             listen="0.0.0.0",
-            port=int(os.getenv('PORT', 8000)),
-            webhook_url=webhook_url,
-            secret_token=os.getenv('WEBHOOK_SECRET', 'your-secret-token')
+            port=port,
+            url_path="webhook",
+            webhook_url=f"{webhook_url}/webhook",
+            allowed_updates=Update.ALL_TYPES
         )
     else:
-        # Polling mode for local development
-        logger.info("Starting polling mode for local development")
+        # Local development mode with polling
+        logger.info("Starting polling mode (local development)")
         application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':

@@ -19,6 +19,7 @@ async def show_admin_menu(update, context):
         [InlineKeyboardButton("⏳ Pending Claims", callback_data="admin_claims")],
         [InlineKeyboardButton("🗑️ Delete Links", callback_data="admin_deletelinks")],
         [InlineKeyboardButton("💳 Test Payment", callback_data="admin_testpayment")],
+        [InlineKeyboardButton("🎉 Toggle Promo Mode", callback_data="admin_togglepromo")],
         [InlineKeyboardButton("❌ Close Menu", callback_data="admin_close")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -30,7 +31,8 @@ async def show_admin_menu(update, context):
         "📊 **Dashboard** - View bot statistics\n"
         "⏳ **Pending Claims** - Review claims\n"
         "🗑️ **Delete Links** - Remove referral links\n"
-        "💳 **Test Payment** - Test submission flow\n\n"
+        "💳 **Test Payment** - Test submission flow\n"
+        "🎉 **Toggle Promo Mode** - Enable/disable free submissions\n\n"
         "**Quick Commands:**\n"
         "`/approve <id>` - Approve a claim\n"
         "`/reject <id>` - Reject a claim\n"
@@ -98,6 +100,17 @@ async def handle_admin_menu(update, context):
             "This will create the link without actual payment.",
             parse_mode='Markdown'
         )
+        
+    elif query.data == "admin_togglepromo":
+        # Import and call toggle promo mode
+        from bot import toggle_promo_mode
+        class FakeUpdate:
+            def __init__(self, query):
+                self.message = query.message
+                self.effective_user = query.from_user
+        
+        fake_update = FakeUpdate(query)
+        await toggle_promo_mode(fake_update, context)
         
     elif query.data == "admin_close":
         await query.edit_message_text("✅ Admin menu closed.")
