@@ -83,8 +83,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args and len(context.args) > 0:
         arg = context.args[0]
         
-        # Handle submission deep link
-        if arg == 'submit':
+        # Handle complete submission flow in private chat
+        if arg == 'submit_flow':
+            await start_private_submission_flow(update, context, user)
+            return
+        
+        # Handle submission deep link (legacy)
+        elif arg == 'submit':
             submission_state = db.get_submission_state(user.id)
             
             if submission_state and submission_state.get('state') == 'SUBMIT_SERVICE':
@@ -167,6 +172,60 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Fallback: send to user directly
         await update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
+async def start_private_submission_flow(update, context, user):
+    """Start complete submission flow in private chat"""
+    # Get user data to check free submissions
+    user_data = db.get_user(user.id)
+    if not user_data:
+        db.create_user(user.id, user.username)
+        user_data = db.get_user(user.id)
+    
+    verified_claims = user_data['total_verified_claims']
+    free_available = user_data['free_submissions_available']
+    
+    # Create plan selection keyboard
+    keyboard = []
+    
+    # Add FREE option if available
+    if free_available > 0:
+        keyboard.append([InlineKeyboardButton(f"🎁 FREE Submission ({free_available} available)", callback_data="plan_FREE")])
+    
+    # Add paid plans
+    keyboard.extend([
+        [InlineKeyboardButton("💎 Plan A - 5 Referrals (25 ⭐)", callback_data="plan_A")],
+        [InlineKeyboardButton("💎 Plan B - 10 Referrals (40 ⭐)", callback_data="plan_B")],
+        [InlineKeyboardButton("💎 Plan C - 30 Referrals (100 ⭐)", callback_data="plan_C")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="submit_cancel")]
+    ])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if free_available > 0:
+        msg_text = (
+            "🔗 **Submit Your Referral Link**\n\n"
+            f"✅ You have {free_available} free submission(s) available!\n\n"
+            "Choose your plan:\n\n"
+            "🎁 **FREE**: 5 referrals (from your verified claims)\n"
+            "💎 **Plan A**: 5 referrals → 25 ⭐\n"
+            "💎 **Plan B**: 10 referrals → 40 ⭐\n"
+            "💎 **Plan C**: 30 referrals → 100 ⭐\n\n"
+            "💡 Each verified claim earns users 3 ⭐"
+        )
+    else:
+        remaining = max(0, 3 - verified_claims)
+        msg_text = (
+            "🔗 **Submit Your Referral Link**\n\n"
+            f"📊 Progress: {verified_claims}/3 verified claims\n"
+            f"💡 Complete {remaining} more claim(s) to unlock FREE submissions!\n\n"
+            "Choose your plan:\n\n"
+            "💎 **Plan A**: 5 referrals → 25 ⭐\n"
+            "💎 **Plan B**: 10 referrals → 40 ⭐\n"
+            "💎 **Plan C**: 30 referrals → 100 ⭐\n\n"
+            "💡 Each verified claim earns users 3 ⭐"
+        )
+    
+    await update.message.reply_text(msg_text, parse_mode='Markdown', reply_markup=reply_markup)
+
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main menu button clicks"""
     query = update.callback_query
@@ -214,7 +273,7 @@ async def my_status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.message.reply_text(status_msg)
 
 async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start link submission process - Show payment or free option"""
+    """Redirect user to private chat for complete submission flow"""
     query = update.callback_query if update.callback_query else None
     user = update.effective_user
     
@@ -226,77 +285,28 @@ async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(msg)
         else:
             await update.message.reply_text(msg)
-        return ConversationHandler.END
+        return
     
-    user_data = db.get_user(user.id)
-    if not user_data:
-        # Auto-register user
-        db.create_user(user.id, user.username)
-        user_data = db.get_user(user.id)
+    # Create user in database
+    db.create_user(user.id, user.username)
     
-    verified_claims = user_data['total_verified_claims']
-    free_available = user_data['free_submissions_available']
-    
-    # Check if user has completed 3 claims or has free submissions
-    if verified_claims >= 3 or free_available > 0:
-        # Show both options: pay or use free
-        keyboard = [
-            [InlineKeyboardButton("💎 Plan A - 5 Referrals (25 ⭐)", callback_data="plan_A")],
-            [InlineKeyboardButton("💎 Plan B - 10 Referrals (40 ⭐)", callback_data="plan_B")],
-            [InlineKeyboardButton("💎 Plan C - 30 Referrals (100 ⭐)", callback_data="plan_C")],
-            [InlineKeyboardButton("🎁 Use Free Submission", callback_data="plan_FREE")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="submit_cancel")]
-        ]
-        msg_text = (
-            "🔗 Submit Your Referral Link\n\n"
-            f"✅ You have {free_available} free submission(s) available!\n\n"
-            "Choose an option:\n\n"
-            "💎 Paid Plans:\n"
-            "• Plan A: 5 referrals → 25 ⭐\n"
-            "• Plan B: 10 referrals → 40 ⭐\n"
-            "• Plan C: 30 referrals → 100 ⭐\n\n"
-            "🎁 Or use your free submission!\n\n"
-            "Each verified claim earns users 3 ⭐\n"
-            "Links auto-delete when limit is reached."
-        )
-    else:
-        # Only show paid options
-        keyboard = [
-            [InlineKeyboardButton("💎 Plan A - 5 Referrals (25 ⭐)", callback_data="plan_A")],
-            [InlineKeyboardButton("💎 Plan B - 10 Referrals (40 ⭐)", callback_data="plan_B")],
-            [InlineKeyboardButton("💎 Plan C - 30 Referrals (100 ⭐)", callback_data="plan_C")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="submit_cancel")]
-        ]
-        remaining = 3 - verified_claims
-        msg_text = (
-            "🔗 Submit Your Referral Link\n\n"
-            f"📊 Your progress: {verified_claims}/3 verified claims\n\n"
-            f"💡 Complete {remaining} more claim(s) to unlock FREE submission!\n\n"
-            "Or choose a paid plan:\n\n"
-            "💎 Plan A: 5 referrals → 25 ⭐\n"
-            "💎 Plan B: 10 referrals → 40 ⭐\n"
-            "💎 Plan C: 30 referrals → 100 ⭐\n\n"
-            "Each verified claim earns users 3 ⭐\n"
-            "Links auto-delete when limit is reached."
-        )
-    
+    # Create button to redirect to private chat
+    keyboard = [[InlineKeyboardButton("🔗 Continue in Private Chat", url=f"https://t.me/refloop_bot?start=submit_flow")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    if query:
-        await context.bot.send_message(
-            chat_id=CHANNEL_ID,
-            text=msg_text,
-            reply_markup=reply_markup
-        )
-    else:
-        await context.bot.send_message(
-            chat_id=CHANNEL_ID,
-            text=msg_text,
-            reply_markup=reply_markup
-        )
+    await context.bot.send_message(
+        chat_id=CHANNEL_ID,
+        text=f"✅ @{user.username}, click the button below to submit your referral link:\n\n"
+             "📝 You'll be guided through:\n"
+             "1️⃣ Choose your plan (A/B/C or FREE)\n"
+             "2️⃣ Select category\n"
+             "3️⃣ Enter service details\n"
+             "4️⃣ Complete payment or use free submission",
+        reply_markup=reply_markup
+    )
 
 async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle plan selection including FREE option"""
+    """Handle plan selection - now works entirely in private chat"""
     query = update.callback_query
     await query.answer()
     
@@ -306,10 +316,7 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
     logger.info(f"submit_plan_choice called by user {user_id} with data: {query.data}")
     
     if query.data == "submit_cancel":
-        await context.bot.send_message(
-            chat_id=CHANNEL_ID,
-            text="❌ Submission cancelled."
-        )
+        await query.edit_message_text("❌ Submission cancelled.")
         user_data.clear()
         return
     
@@ -317,16 +324,15 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if query.data == "plan_FREE":
         db_user_data = db.get_user(user_id)
         if db_user_data['free_submissions_available'] <= 0:
-            await context.bot.send_message(
-                chat_id=CHANNEL_ID,
-                text="❌ You don't have any free submissions available.\n"
-                     "Complete 3 verified claims to unlock free submission!"
+            await query.edit_message_text(
+                "❌ You don't have any free submissions available.\n"
+                "Complete 3 verified claims to unlock free submission!"
             )
             user_data.clear()
             return
         
         user_data['plan'] = 'FREE'
-        user_data['max_claims'] = 5  # Default for free
+        user_data['max_claims'] = 5
         user_data['price'] = 0
         user_data['payment_method'] = 'free'
         plan_name = "Free Submission (5 referrals)"
@@ -338,6 +344,27 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         plan = query.data.split('_')[1]
         user_data['plan'] = plan
         user_data['max_claims'] = PLANS[plan]['max_claims']
+        user_data['price'] = PLANS[plan]['price']
+        user_data['payment_method'] = 'paid'
+        plan_name = PLANS[plan]['name']
+        
+        # Save to database
+        db.save_submission_state(user_id, plan=plan, max_claims=PLANS[plan]['max_claims'])
+    
+    logger.info(f"Plan selected: {plan_name}, moving to category selection")
+    
+    # Show categories in private chat
+    keyboard = [[InlineKeyboardButton(cat, callback_data=f"cat_{i}")] 
+                for i, cat in enumerate(CATEGORIES)]
+    keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="submit_cancel")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        f"✅ **Plan Selected:** {plan_name}\n\n"
+        "📂 **Step 2/4:** Select a category for your referral link:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
         user_data['price'] = PLANS[plan]['price']
         user_data['payment_method'] = 'paid'
         plan_name = PLANS[plan]['name']
@@ -361,7 +388,7 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
 async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle category selection"""
+    """Handle category selection - now works entirely in private chat"""
     query = update.callback_query
     await query.answer()
     
@@ -369,10 +396,7 @@ async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = get_user_data(context, user_id)
     
     if query.data == "submit_cancel":
-        await context.bot.send_message(
-            chat_id=CHANNEL_ID,
-            text="❌ Submission cancelled."
-        )
+        await query.edit_message_text("❌ Submission cancelled.")
         user_data.clear()
         return
     
@@ -383,14 +407,13 @@ async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Save to database
     db.save_submission_state(user_id, state='SUBMIT_SERVICE', category=CATEGORIES[cat_index])
     
-    # Create button to open bot in private chat
-    keyboard = [[InlineKeyboardButton("💬 Continue in Private Chat", url=f"https://t.me/refloop_bot?start=submit")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await context.bot.send_message(
-        chat_id=CHANNEL_ID,
-        text=f"✅ Category selected: {CATEGORIES[cat_index]}\n\n"
-             f"👉 @{query.from_user.username}, click the button below to continue in private chat:\n\n"
+    await query.edit_message_text(
+        f"✅ **Category:** {CATEGORIES[cat_index]}\n\n"
+        "📝 **Step 3/4:** Enter the service name\n"
+        "(e.g., 'Binance', 'Uber', 'Coursera')\n\n"
+        "Just type the name and send it:",
+        parse_mode='Markdown'
+    )
              "📝 You'll be guided step by step to:\n"
              "1️⃣ Enter service name\n"
              "2️⃣ Enter your referral URL\n"
