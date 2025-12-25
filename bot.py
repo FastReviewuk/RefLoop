@@ -332,7 +332,7 @@ async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle service name input"""
-    user_id = update.effective_user.id
+    user_id = update.message.from_user.id if update.message and update.message.from_user else update.effective_user.id
     user_data = get_user_data(context, user_id)
     
     user_data['service_name'] = update.message.text.strip()
@@ -346,7 +346,7 @@ async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle URL input"""
-    user_id = update.effective_user.id
+    user_id = update.message.from_user.id if update.message and update.message.from_user else update.effective_user.id
     user_data = get_user_data(context, user_id)
     
     url = update.message.text.strip()
@@ -368,7 +368,7 @@ async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle description and send payment invoice or create free submission"""
-    user_id = update.effective_user.id
+    user_id = update.message.from_user.id if update.message and update.message.from_user else update.effective_user.id
     user_data = get_user_data(context, user_id)
     
     description = update.message.text.strip()
@@ -965,11 +965,19 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input based on current state"""
-    user_id = update.effective_user.id
+    # Get user from message (could be from channel or private chat)
+    if update.message and update.message.from_user:
+        user_id = update.message.from_user.id
+    elif update.effective_user:
+        user_id = update.effective_user.id
+    else:
+        logger.warning("No user found in update, ignoring")
+        return
+    
     user_data = get_user_data(context, user_id)
     user_state = user_data.get('state')
     
-    logger.info(f"handle_text_input: user {user_id}, state: {user_state}, text: {update.message.text[:50] if update.message.text else 'None'}")
+    logger.info(f"handle_text_input: user {user_id}, state: {user_state}, text: {update.message.text[:50] if update.message and update.message.text else 'None'}")
     
     if user_state == 'SUBMIT_SERVICE':
         await submit_service(update, context)
