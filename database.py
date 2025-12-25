@@ -124,6 +124,10 @@ def get_user(user_id: int):
         cursor.close()
         return user
 
+def get_user_by_id(user_id: int):
+    """Get user by ID (alias for compatibility)"""
+    return get_user(user_id)
+
 def update_user_claims(user_id: int):
     """Increment user's verified claims and handle free submission unlock"""
     with get_db_connection() as conn:
