@@ -782,13 +782,19 @@ async def claim_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data['claim_link_id'] = link_id
     
     await query.edit_message_text(
-        f"🔗 {link['service_name']}\n\n"
-        f"📄 Instructions: {link['description']}\n"
-        f"🌐 Link: {link['url']}\n"
+        f"🔗 **{link['service_name']}**\n\n"
+        f"📄 **What to do:** {link['description']}\n\n"
+        f"🌐 **Referral Link:**\n{link['url']}\n\n"
         f"📊 {link['max_claims'] - link['current_claims']} claims remaining\n\n"
-        "📸 Please complete the sign-up and send a screenshot as proof.\n\n"
-        "⚠️ Your claim will be reviewed by an admin before approval.\n"
-        "✅ You'll earn 3 ⭐ when approved!"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "📸 **NEXT STEP:**\n"
+        "1️⃣ Click the link above\n"
+        "2️⃣ Complete the sign-up\n"
+        "3️⃣ Take a screenshot of the confirmation\n"
+        "4️⃣ Send the screenshot HERE as a photo\n\n"
+        "⚠️ Your claim will be reviewed by an admin\n"
+        "✅ You'll earn 3 ⭐ when approved!",
+        parse_mode='Markdown'
     )
     
     return CLAIM_SCREENSHOT
