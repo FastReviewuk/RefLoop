@@ -951,7 +951,7 @@ def main():
         
         # Start keep-alive system
         keep_alive = KeepAlive(render_url)
-        application.post_init = keep_alive.start
+        application.post_start = keep_alive.start
         
         application.run_webhook(
             listen="0.0.0.0",
