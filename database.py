@@ -84,6 +84,22 @@ def init_database():
             )
         """)
         
+        # Temporary submission state table (for webhook persistence)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS submission_state (
+                user_id BIGINT PRIMARY KEY,
+                state VARCHAR(50),
+                plan VARCHAR(10),
+                category TEXT,
+                service_name TEXT,
+                url TEXT,
+                description TEXT,
+                max_claims INTEGER,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+            )
+        """)
+        
         cursor.close()
         print("Database initialized successfully!")
 
@@ -286,3 +302,43 @@ def check_duplicate_claim(user_id: int, link_id: int):
         count = cursor.fetchone()[0]
         cursor.close()
         return count > 0
+
+# Submission state operations (for webhook persistence)
+def save_submission_state(user_id: int, sta
+
+# Submission state operations (for webhook persistence)
+def save_submission_state(user_id: int, state: str = None, plan: str = None, category: str = None, 
+                         service_name: str = None, url: str = None, description: str = None, max_claims: int = None):
+    """Save or update submission state for a user"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO submission_state (user_id, state, plan, category, service_name, url, description, max_claims, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id) DO UPDATE SET
+                state = COALESCE(EXCLUDED.state, submission_state.state),
+                plan = COALESCE(EXCLUDED.plan, submission_state.plan),
+                category = COALESCE(EXCLUDED.category, submission_state.category),
+                service_name = COALESCE(EXCLUDED.service_name, submission_state.service_name),
+                url = COALESCE(EXCLUDED.url, submission_state.url),
+                description = COALESCE(EXCLUDED.description, submission_state.description),
+                max_claims = COALESCE(EXCLUDED.max_claims, submission_state.max_claims),
+                updated_at = CURRENT_TIMESTAMP
+        """, (user_id, state, plan, category, service_name, url, description, max_claims))
+        cursor.close()
+
+def get_submission_state(user_id: int):
+    """Get submission state for a user"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM submission_state WHERE user_id = %s", (user_id,))
+        state = cursor.fetchone()
+        cursor.close()
+        return state
+
+def clear_submission_state(user_id: int):
+    """Clear submission state for a user"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM submission_state WHERE user_id = %s", (user_id,))
+        cursor.close()

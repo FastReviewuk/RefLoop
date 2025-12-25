@@ -280,6 +280,9 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user_data['price'] = 0
         user_data['payment_method'] = 'free'
         plan_name = "Free Submission (5 referrals)"
+        
+        # Save to database
+        db.save_submission_state(user_id, plan='FREE', max_claims=5)
     else:
         # Extract plan (A, B, or C)
         plan = query.data.split('_')[1]
@@ -288,6 +291,9 @@ async def submit_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user_data['price'] = PLANS[plan]['price']
         user_data['payment_method'] = 'paid'
         plan_name = PLANS[plan]['name']
+        
+        # Save to database
+        db.save_submission_state(user_id, plan=plan, max_claims=PLANS[plan]['max_claims'])
     
     logger.info(f"Plan selected: {plan_name}, moving to category selection")
     
@@ -324,6 +330,9 @@ async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data['category'] = CATEGORIES[cat_index]
     user_data['state'] = 'SUBMIT_SERVICE'
     
+    # Save to database
+    db.save_submission_state(user_id, state='SUBMIT_SERVICE', category=CATEGORIES[cat_index])
+    
     await context.bot.send_message(
         chat_id=CHANNEL_ID,
         text=f"📂 Category: {CATEGORIES[cat_index]}\n\n"
@@ -338,6 +347,9 @@ async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_data['service_name'] = update.message.text.strip()
     user_data['state'] = 'SUBMIT_URL'
+    
+    # Save to database
+    db.save_submission_state(user_id, state='SUBMIT_URL', service_name=update.message.text.strip())
     
     await update.message.reply_text(
         f"✅ Service: {user_data['service_name']}\n\n"
@@ -357,6 +369,9 @@ async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_data['url'] = url
     user_data['state'] = 'SUBMIT_DESCRIPTION'
+    
+    # Save to database
+    db.save_submission_state(user_id, state='SUBMIT_DESCRIPTION', url=url)
     
     await update.message.reply_text(
         "📄 Finally, add a brief description (max 120 characters - what users need to do):"
@@ -380,6 +395,9 @@ async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     user_data['description'] = description
     user_data['state'] = None  # Clear state
+    
+    # Save to database
+    db.save_submission_state(user_id, state=None, description=description)
     
     # Check if this is a free submission
     payment_method = context.user_data.get('payment_method', 'paid')
@@ -957,37 +975,40 @@ async def test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     user_id = update.effective_user.id
-    user_data = get_user_data(context, user_id)
     
-    if not user_data or 'plan' not in user_data:
-        await update.message.reply_text("❌ No pending submission found. Start with /submit_link first.")
+    # Get submission state from database
+    submission_state = db.get_submission_state(user_id)
+    
+    if not submission_state or not submission_state.get('plan'):
+        await update.message.reply_text("❌ No pending submission found. Start with Submit Link first.")
         return
     
     # Simulate successful payment
-    plan = user_data['plan']
-    max_claims = user_data.get('max_claims', PLANS[plan]['max_claims'])
+    plan = submission_state['plan']
+    max_claims = submission_state.get('max_claims', PLANS[plan]['max_claims'])
     
     # Create the referral link
     link_id = db.create_referral_link(
         user_id,
-        user_data['category'],
-        user_data['service_name'],
-        user_data['url'],
-        user_data['description'],
+        submission_state['category'],
+        submission_state['service_name'],
+        submission_state['url'],
+        submission_state['description'],
         max_claims
     )
     
     await update.message.reply_text(
         f"✅ TEST: Payment simulated! Link submitted successfully! (ID: {link_id})\n\n"
-        f"📂 {user_data['category']}\n"
-        f"📝 {user_data['service_name']}\n"
-        f"🔗 {user_data['url']}\n"
+        f"📂 {submission_state['category']}\n"
+        f"📝 {submission_state['service_name']}\n"
+        f"🔗 {submission_state['url']}\n"
         f"📊 Max referrals: {max_claims}\n\n"
         "Your link is now available for users to claim! 🎉\n"
         "It will auto-delete when the limit is reached."
     )
     
-    user_data.clear()
+    # Clear submission state from database
+    db.clear_submission_state(user_id)
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancel conversation"""
