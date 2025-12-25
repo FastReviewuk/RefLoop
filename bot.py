@@ -15,6 +15,7 @@ from telegram.ext import (
     filters
 )
 import database as db
+import admin_dashboard
 
 # Load environment variables from .env file
 env_path = Path(__file__).parent / '.env'
@@ -73,6 +74,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Create user in database (auto-registration)
     db.create_user(user.id, user.username)
+    
+    # Check if this is a deep link for submission continuation
+    if context.args and context.args[0] == 'submit':
+        # User clicked the button to continue submission in private chat
+        submission_state = db.get_submission_state(user.id)
+        
+        if submission_state and submission_state.get('state') == 'SUBMIT_SERVICE':
+            await update.message.reply_text(
+                f"✅ Great! Let's continue your submission.\n\n"
+                f"📂 Category: {submission_state['category']}\n"
+                f"💰 Plan: {submission_state['plan']}\n\n"
+                "📝 Step 1/3: Enter the service name\n"
+                "(e.g., 'Binance', 'Uber', 'Coursera')"
+            )
+            return
     
     # Get user data to show current status
     user_data = db.get_user(user.id)
@@ -333,11 +349,19 @@ async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Save to database
     db.save_submission_state(user_id, state='SUBMIT_SERVICE', category=CATEGORIES[cat_index])
     
+    # Create button to open bot in private chat
+    keyboard = [[InlineKeyboardButton("💬 Continue in Private Chat", url=f"https://t.me/refloop_bot?start=submit")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     await context.bot.send_message(
         chat_id=CHANNEL_ID,
-        text=f"📂 Category: {CATEGORIES[cat_index]}\n\n"
-             f"👉 @{query.from_user.username}, please continue in private chat with me @refloop_bot\n\n"
-             "📝 Send me the service name (e.g., 'Binance', 'Uber', 'Coursera')"
+        text=f"✅ Category selected: {CATEGORIES[cat_index]}\n\n"
+             f"👉 @{query.from_user.username}, click the button below to continue in private chat:\n\n"
+             "📝 You'll be guided step by step to:\n"
+             "1️⃣ Enter service name\n"
+             "2️⃣ Enter your referral URL\n"
+             "3️⃣ Add a description",
+        reply_markup=reply_markup
     )
 
 async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -353,7 +377,8 @@ async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"✅ Service: {user_data['service_name']}\n\n"
-        "🔗 Now, send your referral link URL:"
+        "📝 Step 2/3: Send your referral link URL\n"
+        "(Must start with http:// or https://)"
     )
 
 async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -374,7 +399,9 @@ async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.save_submission_state(user_id, state='SUBMIT_DESCRIPTION', url=url)
     
     await update.message.reply_text(
-        "📄 Finally, add a brief description (max 120 characters - what users need to do):"
+        "✅ URL saved!\n\n"
+        "📝 Step 3/3: Add a brief description (max 120 characters)\n"
+        "Tell users what they need to do (e.g., 'Sign up and verify email')"
     )
 
 async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1069,6 +1096,7 @@ def main():
     application.add_handler(CommandHandler("approve", approve_claim))
     application.add_handler(CommandHandler("reject", reject_claim))
     application.add_handler(CommandHandler("test_payment", test_payment))
+    application.add_handler(CommandHandler("dashboard", admin_dashboard.show_dashboard))
     
     # Menu handlers
     application.add_handler(CallbackQueryHandler(menu_handler, pattern="^menu_"))
