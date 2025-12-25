@@ -16,6 +16,7 @@ from telegram.ext import (
 )
 import database as db
 import admin_dashboard
+import admin_claims
 from keep_alive import KeepAlive
 
 # Load environment variables from .env file
@@ -77,19 +78,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.create_user(user.id, user.username)
     
     # Check if this is a deep link for submission continuation
-    if context.args and context.args[0] == 'submit':
-        # User clicked the button to continue submission in private chat
-        submission_state = db.get_submission_state(user.id)
+    if context.args and len(context.args) > 0:
+        arg = context.args[0]
         
-        if submission_state and submission_state.get('state') == 'SUBMIT_SERVICE':
-            await update.message.reply_text(
-                f"✅ Great! Let's continue your submission.\n\n"
-                f"📂 Category: {submission_state['category']}\n"
-                f"💰 Plan: {submission_state['plan']}\n\n"
-                "📝 Step 1/3: Enter the service name\n"
-                "(e.g., 'Binance', 'Uber', 'Coursera')"
-            )
-            return
+        # Handle submission deep link
+        if arg == 'submit':
+            submission_state = db.get_submission_state(user.id)
+            
+            if submission_state and submission_state.get('state') == 'SUBMIT_SERVICE':
+                await update.message.reply_text(
+                    f"✅ Great! Let's continue your submission.\n\n"
+                    f"📂 Category: {submission_state['category']}\n"
+                    f"💰 Plan: {submission_state['plan']}\n\n"
+                    "📝 Step 1/3: Enter the service name\n"
+                    "(e.g., 'Binance', 'Uber', 'Coursera')"
+                )
+                return
+        
+        # Handle claim screenshot deep link
+        elif arg.startswith('claim_'):
+            link_id = int(arg.split('_')[1])
+            link = db.get_link_by_id(link_id)
+            
+            if link:
+                # Store claim link in user data
+                user_data_context = get_user_data(context, user.id)
+                user_data_context['claim_link_id'] = link_id
+                user_data_context['state'] = 'CLAIM_SCREENSHOT'
+                
+                await update.message.reply_text(
+                    f"📸 **Ready to submit your claim!**\n\n"
+                    f"🔗 Service: {link['service_name']}\n"
+                    f"📂 Category: {link['category']}\n\n"
+                    "Please send your screenshot now as a photo.\n\n"
+                    "⚠️ Make sure the screenshot shows:\n"
+                    "• Confirmation of sign-up\n"
+                    "• Your username/email visible\n"
+                    "• Clear and readable",
+                    parse_mode='Markdown'
+                )
+                return
+            else:
+                await update.message.reply_text("❌ This referral link is no longer available.")
+                return
     
     # Get user data to show current status
     user_data = db.get_user(user.id)
@@ -782,20 +813,25 @@ async def claim_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_data['claim_link_id'] = link_id
     
+    # Create button to continue in private chat
+    keyboard = [[InlineKeyboardButton("📸 Send Screenshot in Private Chat", url=f"https://t.me/refloop_bot?start=claim_{link_id}")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     await query.edit_message_text(
         f"🔗 **{link['service_name']}**\n\n"
         f"📄 **What to do:** {link['description']}\n\n"
         f"🌐 **Referral Link:**\n{link['url']}\n\n"
         f"📊 {link['max_claims'] - link['current_claims']} claims remaining\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "📸 **NEXT STEP:**\n"
-        "1️⃣ Click the link above\n"
+        "📸 **NEXT STEPS:**\n"
+        "1️⃣ Click the referral link above\n"
         "2️⃣ Complete the sign-up\n"
         "3️⃣ Take a screenshot of the confirmation\n"
-        "4️⃣ Send the screenshot HERE as a photo\n\n"
+        "4️⃣ Click the button below to send screenshot\n\n"
         "⚠️ Your claim will be reviewed by an admin\n"
         "✅ You'll earn 3 ⭐ when approved!",
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=reply_markup
     )
     
     return CLAIM_SCREENSHOT
@@ -1124,6 +1160,8 @@ def main():
     application.add_handler(CommandHandler("reject", reject_claim))
     application.add_handler(CommandHandler("test_payment", test_payment))
     application.add_handler(CommandHandler("dashboard", admin_dashboard.show_dashboard))
+    application.add_handler(CommandHandler("claims", admin_claims.list_claims))
+    application.add_handler(CommandHandler("screenshot", admin_claims.view_screenshot))
     
     # Menu handlers
     application.add_handler(CallbackQueryHandler(menu_handler, pattern="^menu_"))
