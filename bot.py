@@ -1147,11 +1147,6 @@ def main():
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
     
-    # Health check endpoint (for keep-alive)
-    async def health_check(request):
-        """Health check endpoint"""
-        return web.Response(text='{"status":"ok","bot":"RefLoop","uptime":"running"}', content_type='application/json')
-    
     # Start bot
     logger.info("Bot started!")
     
@@ -1163,20 +1158,21 @@ def main():
         # Production mode with webhook
         logger.info(f"Starting webhook mode on {webhook_url}")
         
-        # Start keep-alive system
-        keep_alive = KeepAlive(webhook_url, interval=840)  # Ping every 14 minutes
-        keep_alive.start()
-        logger.info("🔄 Keep-alive system activated")
+        # Setup keep-alive as a background task
+        async def post_init(app: Application):
+            """Initialize keep-alive after application starts"""
+            keep_alive = KeepAlive(webhook_url, interval=840)
+            keep_alive.start()
+            logger.info("🔄 Keep-alive system activated")
+        
+        application.post_init = post_init
         
         application.run_webhook(
             listen="0.0.0.0",
             port=port,
             url_path="webhook",
             webhook_url=f"{webhook_url}/webhook",
-            allowed_updates=Update.ALL_TYPES,
-            webhook_kwargs={
-                "health_check_path": "/health"
-            }
+            allowed_updates=Update.ALL_TYPES
         )
     else:
         # Local development mode with polling
