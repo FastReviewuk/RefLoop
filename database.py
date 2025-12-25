@@ -304,9 +304,6 @@ def check_duplicate_claim(user_id: int, link_id: int):
         return count > 0
 
 # Submission state operations (for webhook persistence)
-def save_submission_state(user_id: int, sta
-
-# Submission state operations (for webhook persistence)
 def save_submission_state(user_id: int, state: str = None, plan: str = None, category: str = None, 
                          service_name: str = None, url: str = None, description: str = None, max_claims: int = None):
     """Save or update submission state for a user"""
