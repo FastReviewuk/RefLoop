@@ -48,10 +48,13 @@ def get_user_data(context: ContextTypes.DEFAULT_TYPE, user_id: int):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler - Register user and show menu"""
+    logger.info(f"START command received from user {update.effective_user.id} (@{update.effective_user.username})")
+    
     user = update.effective_user
     
     # Check if user has a public username
     if not user.username:
+        logger.warning(f"User {user.id} has no username")
         await update.message.reply_text(
             "❌ Sorry! You need a public Telegram username to use this bot.\n\n"
             "Please set a username in Telegram Settings → Edit Profile → Username"
@@ -59,10 +62,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Create user in database (auto-registration)
-    db.create_user(user.id, user.username)
+    try:
+        db.create_user(user.id, user.username)
+        logger.info(f"User {user.id} (@{user.username}) created/updated in database")
+    except Exception as e:
+        logger.error(f"Failed to create user {user.id}: {e}")
     
     # Handle deep links for direct submission
     if context.args and context.args[0] == 'submit':
+        logger.info(f"Starting submission flow for user {user.id}")
         await start_submission_flow(update, context, user)
         return
     
@@ -85,15 +93,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Choose an option below:"
     )
     
-    if update.message.chat.type == 'private':
-        await update.message.reply_text(welcome_text, reply_markup=reply_markup)
-    else:
-        # In channel, send to channel
-        await context.bot.send_message(
-            chat_id=CHANNEL_ID,
-            text=welcome_text,
-            reply_markup=reply_markup
-        )
+    try:
+        if update.message.chat.type == 'private':
+            await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+            logger.info(f"Welcome message sent to private chat for user {user.id}")
+        else:
+            # In channel, send to channel
+            await context.bot.send_message(
+                chat_id=CHANNEL_ID,
+                text=welcome_text,
+                reply_markup=reply_markup
+            )
+            logger.info(f"Welcome message sent to channel for user {user.id}")
+    except Exception as e:
+        logger.error(f"Failed to send welcome message to user {user.id}: {e}")
+        await update.message.reply_text("❌ Something went wrong. Please try again.")
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main menu button clicks"""
@@ -467,24 +481,9 @@ def main():
     
     logger.info("✅ All handlers registered")
     
-    # Check if running on Render (webhook mode) or locally (polling mode)
-    render_url = os.getenv('RENDER_EXTERNAL_URL')
-    
-    if render_url:
-        # Webhook mode for Render
-        webhook_url = f"{render_url}/webhook"
-        logger.info(f"Starting webhook mode with URL: {webhook_url}")
-        
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=int(os.getenv('PORT', 8000)),
-            webhook_url=webhook_url,
-            secret_token=os.getenv('WEBHOOK_SECRET', 'your-secret-token')
-        )
-    else:
-        # Polling mode for local development
-        logger.info("Starting polling mode for local development")
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Force polling mode for reliability
+    logger.info("Starting polling mode for maximum reliability")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
