@@ -169,7 +169,8 @@ def create_referral_link(referrer_user_id: int, category: str, service_name: str
             VALUES (%s, %s, %s, %s, %s, %s, 0)
             RETURNING id
         """, (referrer_user_id, category, service_name, url, description, max_claims))
-        link_id = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        link_id = result['id']
         cursor.close()
         return link_id
 
@@ -245,7 +246,8 @@ def create_claim(referred_user_id: int, link_id: int, screenshot_file_id: str):
             VALUES (%s, %s, %s)
             RETURNING id
         """, (referred_user_id, link_id, screenshot_file_id))
-        claim_id = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        claim_id = result['id']
         cursor.close()
         return claim_id
 
@@ -296,10 +298,11 @@ def check_duplicate_claim(user_id: int, link_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT COUNT(*) FROM claims 
+            SELECT COUNT(*) as count FROM claims 
             WHERE referred_user_id = %s AND link_id = %s
         """, (user_id, link_id))
-        count = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        count = result['count']
         cursor.close()
         return count > 0
 
