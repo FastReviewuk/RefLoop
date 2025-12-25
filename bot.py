@@ -949,9 +949,9 @@ def main():
         webhook_url = f"{render_url}/webhook"
         logger.info(f"Starting webhook mode with URL: {webhook_url}")
         
-        # Start keep-alive system
-        keep_alive = KeepAlive(render_url)
-        application.post_start = keep_alive.start
+        # Temporarily disable keep-alive for debugging
+        # keep_alive = KeepAlive(render_url)
+        # application.post_start = keep_alive.start
         
         application.run_webhook(
             listen="0.0.0.0",
