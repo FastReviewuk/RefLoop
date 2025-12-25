@@ -915,6 +915,8 @@ def main():
     application.add_handler(CommandHandler("screenshot", admin_claims.view_screenshot))
     application.add_handler(CommandHandler("deletelinks", admin_delete_links.list_links_for_deletion))
     
+    logger.info("✅ Command handlers registered")
+    
     # Menu handlers
     application.add_handler(CallbackQueryHandler(menu_handler, pattern="^menu_"))
     
@@ -939,7 +941,12 @@ def main():
     application.add_handler(CallbackQueryHandler(browse_category, pattern="^browse_cat_"))
     
     # Initialize database
-    db.init_database()
+    try:
+        db.init_database()
+        logger.info("✅ Database initialization completed successfully")
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {e}")
+        return
     
     # Check if running on Render (webhook mode) or locally (polling mode)
     render_url = os.getenv('RENDER_EXTERNAL_URL')
