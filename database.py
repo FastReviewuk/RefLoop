@@ -232,7 +232,7 @@ def get_categories():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT category FROM referral_links ORDER BY category")
-        categories = [row[0] for row in cursor.fetchall()]
+        categories = [row['category'] for row in cursor.fetchall()]
         cursor.close()
         return categories
 
