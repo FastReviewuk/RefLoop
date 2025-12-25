@@ -327,7 +327,8 @@ async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=CHANNEL_ID,
         text=f"📂 Category: {CATEGORIES[cat_index]}\n\n"
-             "📝 Now, enter the service name (e.g., 'Binance', 'Uber', 'Coursera'):"
+             f"👉 @{query.from_user.username}, please continue in private chat with me @refloop_bot\n\n"
+             "📝 Send me the service name (e.g., 'Binance', 'Uber', 'Coursera')"
     )
 
 async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -338,10 +339,9 @@ async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data['service_name'] = update.message.text.strip()
     user_data['state'] = 'SUBMIT_URL'
     
-    await context.bot.send_message(
-        chat_id=CHANNEL_ID,
-        text=f"✅ Service: {user_data['service_name']}\n\n"
-             "🔗 Now, send your referral link URL:"
+    await update.message.reply_text(
+        f"✅ Service: {user_data['service_name']}\n\n"
+        "🔗 Now, send your referral link URL:"
     )
 
 async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -352,18 +352,14 @@ async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
     
     if not url.startswith(('http://', 'https://')):
-        await context.bot.send_message(
-            chat_id=CHANNEL_ID,
-            text="❌ Please enter a valid URL starting with http:// or https://"
-        )
+        await update.message.reply_text("❌ Please enter a valid URL starting with http:// or https://")
         return
     
     user_data['url'] = url
     user_data['state'] = 'SUBMIT_DESCRIPTION'
     
-    await context.bot.send_message(
-        chat_id=CHANNEL_ID,
-        text="📄 Finally, add a brief description (max 120 characters - what users need to do):"
+    await update.message.reply_text(
+        "📄 Finally, add a brief description (max 120 characters - what users need to do):"
     )
 
 async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
