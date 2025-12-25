@@ -309,12 +309,15 @@ async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    user_id = query.from_user.id
+    user_data = get_user_data(context, user_id)
+    
     if query.data == "submit_cancel":
         await context.bot.send_message(
             chat_id=CHANNEL_ID,
             text="❌ Submission cancelled."
         )
-        context.user_data.clear()
+        user_data.clear()
         return
     
     cat_index = int(query.data.split('_')[1])
@@ -329,6 +332,9 @@ async def submit_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle service name input"""
+    user_id = update.effective_user.id
+    user_data = get_user_data(context, user_id)
+    
     user_data['service_name'] = update.message.text.strip()
     user_data['state'] = 'SUBMIT_URL'
     
@@ -340,6 +346,9 @@ async def submit_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle URL input"""
+    user_id = update.effective_user.id
+    user_data = get_user_data(context, user_id)
+    
     url = update.message.text.strip()
     
     if not url.startswith(('http://', 'https://')):
@@ -359,6 +368,9 @@ async def submit_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle description and send payment invoice or create free submission"""
+    user_id = update.effective_user.id
+    user_data = get_user_data(context, user_id)
+    
     description = update.message.text.strip()
     
     # Validate description length (max 120 characters)
