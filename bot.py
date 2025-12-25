@@ -1167,12 +1167,31 @@ def main():
         
         application.post_init = post_init
         
+        # Custom health check handler for Tornado
+        from tornado.web import RequestHandler
+        
+        class HealthHandler(RequestHandler):
+            def get(self):
+                self.set_header("Content-Type", "application/json")
+                self.write('{"status":"ok","bot":"RefLoop","uptime":"running"}')
+        
+        class RootHandler(RequestHandler):
+            def get(self):
+                self.set_header("Content-Type", "application/json")
+                self.write('{"message":"RefLoop Bot is running","health":"/health"}')
+        
         application.run_webhook(
             listen="0.0.0.0",
             port=port,
             url_path="webhook",
             webhook_url=f"{webhook_url}/webhook",
-            allowed_updates=Update.ALL_TYPES
+            allowed_updates=Update.ALL_TYPES,
+            webhook_kwargs={
+                "custom_handlers": [
+                    (r"/health", HealthHandler),
+                    (r"/", RootHandler)
+                ]
+            }
         )
     else:
         # Local development mode with polling
