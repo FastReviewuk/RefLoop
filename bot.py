@@ -17,6 +17,7 @@ from telegram.ext import (
 import database as db
 import admin_dashboard
 import admin_claims
+import admin_delete_links
 from keep_alive import KeepAlive
 
 # Load environment variables from .env file
@@ -1162,9 +1163,13 @@ def main():
     application.add_handler(CommandHandler("dashboard", admin_dashboard.show_dashboard))
     application.add_handler(CommandHandler("claims", admin_claims.list_claims))
     application.add_handler(CommandHandler("screenshot", admin_claims.view_screenshot))
+    application.add_handler(CommandHandler("deletelinks", admin_delete_links.list_links_for_deletion))
     
     # Menu handlers
     application.add_handler(CallbackQueryHandler(menu_handler, pattern="^menu_"))
+    
+    # Delete links handler (admin)
+    application.add_handler(CallbackQueryHandler(admin_delete_links.handle_delete_link, pattern="^dellink_"))
     
     # Submit link handlers (without ConversationHandler)
     application.add_handler(CallbackQueryHandler(submit_plan_choice, pattern="^plan_"))
