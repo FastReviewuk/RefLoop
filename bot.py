@@ -18,6 +18,7 @@ import database as db
 import admin_dashboard
 import admin_claims
 import admin_delete_links
+import admin_menu
 from keep_alive import KeepAlive
 
 # Load environment variables from .env file
@@ -1160,6 +1161,7 @@ def main():
     application.add_handler(CommandHandler("approve", approve_claim))
     application.add_handler(CommandHandler("reject", reject_claim))
     application.add_handler(CommandHandler("test_payment", test_payment))
+    application.add_handler(CommandHandler("admin", admin_menu.show_admin_menu))
     application.add_handler(CommandHandler("dashboard", admin_dashboard.show_dashboard))
     application.add_handler(CommandHandler("claims", admin_claims.list_claims))
     application.add_handler(CommandHandler("screenshot", admin_claims.view_screenshot))
@@ -1167,6 +1169,9 @@ def main():
     
     # Menu handlers
     application.add_handler(CallbackQueryHandler(menu_handler, pattern="^menu_"))
+    
+    # Admin menu handler
+    application.add_handler(CallbackQueryHandler(admin_menu.handle_admin_menu, pattern="^admin_"))
     
     # Delete links handler (admin)
     application.add_handler(CallbackQueryHandler(admin_delete_links.handle_delete_link, pattern="^dellink_"))
