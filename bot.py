@@ -950,6 +950,45 @@ async def reject_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(f"✅ Claim {claim_id} rejected.")
 
+async def test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to simulate a payment for testing"""
+    if update.effective_user.id not in ADMIN_USER_IDS:
+        await update.message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    user_id = update.effective_user.id
+    user_data = get_user_data(context, user_id)
+    
+    if not user_data or 'plan' not in user_data:
+        await update.message.reply_text("❌ No pending submission found. Start with /submit_link first.")
+        return
+    
+    # Simulate successful payment
+    plan = user_data['plan']
+    max_claims = user_data.get('max_claims', PLANS[plan]['max_claims'])
+    
+    # Create the referral link
+    link_id = db.create_referral_link(
+        user_id,
+        user_data['category'],
+        user_data['service_name'],
+        user_data['url'],
+        user_data['description'],
+        max_claims
+    )
+    
+    await update.message.reply_text(
+        f"✅ TEST: Payment simulated! Link submitted successfully! (ID: {link_id})\n\n"
+        f"📂 {user_data['category']}\n"
+        f"📝 {user_data['service_name']}\n"
+        f"🔗 {user_data['url']}\n"
+        f"📊 Max referrals: {max_claims}\n\n"
+        "Your link is now available for users to claim! 🎉\n"
+        "It will auto-delete when the limit is reached."
+    )
+    
+    user_data.clear()
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancel conversation"""
     await context.bot.send_message(
@@ -998,6 +1037,7 @@ def main():
     application.add_handler(CommandHandler("browse", browse_links))
     application.add_handler(CommandHandler("approve", approve_claim))
     application.add_handler(CommandHandler("reject", reject_claim))
+    application.add_handler(CommandHandler("test_payment", test_payment))
     
     # Menu handlers
     application.add_handler(CallbackQueryHandler(menu_handler, pattern="^menu_"))
