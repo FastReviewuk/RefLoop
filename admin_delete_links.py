@@ -114,16 +114,34 @@ async def handle_delete_link(update, context):
         await query.edit_message_text(f"❌ Link {link_id} not found (already deleted?).")
         return
     
-    # Delete the link
+    # Check for associated claims
+    with db.get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as count FROM claims WHERE link_id = %s", (link_id,))
+        result = cursor.fetchone()
+        claims_count = result['count']
+        cursor.close()
+    
+    # Delete associated claims first (if any)
+    if claims_count > 0:
+        with db.get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM claims WHERE link_id = %s", (link_id,))
+            cursor.close()
+    
+    # Now delete the link
     db.delete_referral_link(link_id)
     
     # Send confirmation
+    warning = f"\n⚠️ Also deleted {claims_count} associated claim(s)." if claims_count > 0 else ""
+    
     await query.edit_message_text(
         f"✅ **Link Deleted Successfully!**\n\n"
         f"🆔 ID: {link_id}\n"
         f"📝 Service: {link['service_name']}\n"
         f"📂 Category: {link['category']}\n"
-        f"📊 Claims: {link['current_claims']}/{link['max_claims']}\n\n"
+        f"📊 Claims: {link['current_claims']}/{link['max_claims']}\n"
+        f"{warning}\n\n"
         f"The link has been permanently removed from the database.",
         parse_mode='Markdown'
     )
@@ -131,4 +149,4 @@ async def handle_delete_link(update, context):
     # Log the deletion
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"Admin {user_id} deleted link {link_id} ({link['service_name']})")
+    logger.info(f"Admin {user_id} deleted link {link_id} ({link['service_name']}) with {claims_count} claims")
