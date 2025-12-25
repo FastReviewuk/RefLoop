@@ -47,7 +47,7 @@ class KeepAlive:
             if self.running:  # Check again after sleep
                 await self.ping()
     
-    def start(self):
+    def start(self, application=None):
         """Start the keep-alive system"""
         if not self.task or self.task.done():
             self.task = asyncio.create_task(self.run())
