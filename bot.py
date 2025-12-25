@@ -997,6 +997,7 @@ async def test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         max_claims
     )
     
+    # Send success message in private chat
     await update.message.reply_text(
         f"✅ TEST: Payment simulated! Link submitted successfully! (ID: {link_id})\n\n"
         f"📂 {submission_state['category']}\n"
@@ -1005,6 +1006,15 @@ async def test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📊 Max referrals: {max_claims}\n\n"
         "Your link is now available for users to claim! 🎉\n"
         "It will auto-delete when the limit is reached."
+    )
+    
+    # Also notify in channel
+    await context.bot.send_message(
+        chat_id=CHANNEL_ID,
+        text=f"✅ New link submitted by @{update.effective_user.username}!\n\n"
+             f"📂 {submission_state['category']}\n"
+             f"📝 {submission_state['service_name']}\n"
+             f"📊 Max referrals: {max_claims}"
     )
     
     # Clear submission state from database
