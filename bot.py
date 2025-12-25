@@ -730,7 +730,7 @@ async def claim_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Show available services
     keyboard = []
     for link in links[:20]:  # Max 20 links
-        remaining = link['max_claims'] - link['used_claims']
+        remaining = link['max_claims'] - link['current_claims']
         keyboard.append([InlineKeyboardButton(
             f"{link['service_name']} ({remaining} left)",
             callback_data=f"claim_link_{link['id']}"
