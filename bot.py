@@ -703,8 +703,12 @@ async def claim_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    user_id = query.from_user.id
+    user_data = get_user_data(context, user_id)
+    
     if query.data == "claim_cancel":
         await query.edit_message_text("❌ Claim cancelled.")
+        user_data.clear()
         return ConversationHandler.END
     
     categories = db.get_categories()
@@ -718,6 +722,7 @@ async def claim_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📭 No available links in {category}\n\n"
             "Try another category!"
         )
+        user_data.clear()
         return ConversationHandler.END
     
     user_data['claim_category'] = category
@@ -746,8 +751,12 @@ async def claim_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    user_id = query.from_user.id
+    user_data = get_user_data(context, user_id)
+    
     if query.data == "claim_cancel":
         await query.edit_message_text("❌ Claim cancelled.")
+        user_data.clear()
         return ConversationHandler.END
     
     link_id = int(query.data.split('_')[-1])
@@ -755,16 +764,19 @@ async def claim_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not link:
         await query.edit_message_text("❌ This referral link is no longer active.")
+        user_data.clear()
         return ConversationHandler.END
     
     # Safety check: verify link still has available claims
     if link['current_claims'] >= link['max_claims']:
         await query.edit_message_text("❌ This referral link is no longer active.")
+        user_data.clear()
         return ConversationHandler.END
     
     # Check for duplicate claim
     if db.check_duplicate_claim(query.from_user.id, link_id):
         await query.edit_message_text("❌ You've already claimed this link!")
+        user_data.clear()
         return ConversationHandler.END
     
     user_data['claim_link_id'] = link_id
@@ -783,6 +795,9 @@ async def claim_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def claim_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle screenshot submission"""
+    user_id = update.effective_user.id
+    user_data = get_user_data(context, user_id)
+    
     if not update.message.photo:
         await update.message.reply_text("❌ Please send a screenshot (photo).")
         return CLAIM_SCREENSHOT
@@ -791,7 +806,12 @@ async def claim_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     screenshot_file_id = photo.file_id
     
-    link_id = user_data['claim_link_id']
+    link_id = user_data.get('claim_link_id')
+    
+    if not link_id:
+        await update.message.reply_text("❌ Session expired. Please start again with /start")
+        user_data.clear()
+        return ConversationHandler.END
     
     # Create claim
     claim_id = db.create_claim(
@@ -827,7 +847,7 @@ async def claim_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "You'll be notified once it's approved!"
     )
     
-    context.user_data.clear()
+    user_data.clear()
     return ConversationHandler.END
 
 async def approve_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
