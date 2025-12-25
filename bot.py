@@ -1158,40 +1158,22 @@ def main():
         # Production mode with webhook
         logger.info(f"Starting webhook mode on {webhook_url}")
         
-        # Setup keep-alive as a background task
+        # Setup keep-alive as background task
+        # Note: We ping the root URL since we can't add custom routes easily
         async def post_init(app: Application):
             """Initialize keep-alive after application starts"""
             keep_alive = KeepAlive(webhook_url, interval=840)
             keep_alive.start()
-            logger.info("🔄 Keep-alive system activated")
+            logger.info("🔄 Keep-alive system activated (pinging root URL)")
         
         application.post_init = post_init
-        
-        # Custom health check handler for Tornado
-        from tornado.web import RequestHandler
-        
-        class HealthHandler(RequestHandler):
-            def get(self):
-                self.set_header("Content-Type", "application/json")
-                self.write('{"status":"ok","bot":"RefLoop","uptime":"running"}')
-        
-        class RootHandler(RequestHandler):
-            def get(self):
-                self.set_header("Content-Type", "application/json")
-                self.write('{"message":"RefLoop Bot is running","health":"/health"}')
         
         application.run_webhook(
             listen="0.0.0.0",
             port=port,
             url_path="webhook",
             webhook_url=f"{webhook_url}/webhook",
-            allowed_updates=Update.ALL_TYPES,
-            webhook_kwargs={
-                "custom_handlers": [
-                    (r"/health", HealthHandler),
-                    (r"/", RootHandler)
-                ]
-            }
+            allowed_updates=Update.ALL_TYPES
         )
     else:
         # Local development mode with polling

@@ -28,8 +28,9 @@ class KeepAlive:
         """Ping the server to keep it alive"""
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{self.url}/health", timeout=10) as response:
-                    if response.status == 200:
+                # Ping root URL since /health endpoint is not available
+                async with session.get(self.url, timeout=10) as response:
+                    if response.status in [200, 404]:  # 404 is ok, means server is up
                         logger.info(f"✅ Keep-alive ping successful at {datetime.now()}")
                     else:
                         logger.warning(f"⚠️ Keep-alive ping returned status {response.status}")
