@@ -111,21 +111,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main menu button clicks"""
-    query = update.callback_query
-    await query.answer()
-    
-    user = update.effective_user
-    
-    if not user.username:
-        await query.message.reply_text("❌ You need a public username to use this bot.")
-        return
-    
-    if query.data == "menu_submit":
-        # Start submit link flow
-        await submit_link_start(update, context)
-    elif query.data == "menu_browse":
-        # Start browse flow
-        await browse_links_callback(update, context)
+    try:
+        query = update.callback_query
+        await query.answer()
+        
+        user = update.effective_user
+        
+        if not user.username:
+            await query.message.reply_text("❌ You need a public username to use this bot.")
+            return
+        
+        if query.data == "menu_submit":
+            # Start submit link flow
+            await submit_link_start(update, context)
+        elif query.data == "menu_browse":
+            # Start browse flow
+            await browse_links_callback(update, context)
+    except Exception as e:
+        logger.error(f"Error in menu_handler: {e}")
+        try:
+            await update.callback_query.answer("❌ An error occurred. Please try again.")
+        except:
+            pass
 
 async def submit_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start link submission flow"""
@@ -305,123 +312,146 @@ async def submit_description(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def browse_links_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Browse available referral links"""
-    query = update.callback_query
-    user = query.from_user
-    
-    if not user.username:
-        await query.message.reply_text("❌ You need a public username to use this bot.")
-        return
-    
-    # Get all categories with available links
-    categories = db.get_categories()
-    
-    if not categories:
-        await query.message.reply_text(
-            "📭 No referral links available yet.\n\n"
-            "Be the first to submit one!"
-        )
-        return
-    
-    keyboard = [[InlineKeyboardButton(cat, callback_data=f"browse_cat_{i}")] 
-                for i, cat in enumerate(categories)]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.message.reply_text(
-        "🔍 **Browse Referral Links**\n\n"
-        "Select a category:",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-
-async def browse_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show links in selected category"""
-    query = update.callback_query
-    await query.answer()
-    
-    categories = db.get_categories()
-    cat_index = int(query.data.split('_')[-1])
-    category = categories[cat_index]
-    
-    # Get available links (not used yet)
-    links = db.get_available_links(category)
-    
-    if not links:
-        await query.edit_message_text(
-            f"📭 No available links in **{category}**\n\n"
-            "Try another category or check back later!",
-            parse_mode='Markdown'
-        )
-        return
-    
-    # Show links with use buttons
-    keyboard = []
-    message = f"🔗 **Available Links in {category}:**\n\n"
-    
-    for i, link in enumerate(links[:10]):  # Show max 10 links
-        message += (
-            f"**{i+1}. {link['service_name']}**\n"
-            f"📄 {link['description']}\n"
-            f"👤 By @{db.get_user_by_id(link['referrer_user_id'])['username']}\n\n"
-        )
-        keyboard.append([InlineKeyboardButton(f"🔗 Use {link['service_name']}", callback_data=f"use_link_{link['id']}")])
-    
-    keyboard.append([InlineKeyboardButton("🔙 Back to Categories", callback_data="menu_browse")])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.edit_message_text(message, parse_mode='Markdown', reply_markup=reply_markup)
-
-async def use_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle link usage"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    link_id = int(query.data.split('_')[-1])
-    
-    # Get link details
-    link = db.get_link_by_id(link_id)
-    
-    if not link:
-        await query.edit_message_text("❌ This link is no longer available.")
-        return
-    
-    # Check if link is still available
-    if link['current_claims'] >= link['max_claims']:
-        await query.edit_message_text("❌ This link has already been used.")
-        return
-    
-    # Check if user is trying to use their own link
-    if link['referrer_user_id'] == user_id:
-        await query.edit_message_text("❌ You cannot use your own referral link!")
-        return
-    
-    # Mark link as used (increment claims)
-    db.increment_link_claims(link_id)
-    
-    # Show the referral link to user
-    await query.edit_message_text(
-        f"🎉 **Here's your referral link!**\n\n"
-        f"🔗 **Service:** {link['service_name']}\n"
-        f"📄 **Instructions:** {link['description']}\n\n"
-        f"👆 **Click here to sign up:**\n{link['url']}\n\n"
-        f"✅ This link has been marked as used and removed from the list.\n"
-        f"Thanks for using RefLoop!",
-        parse_mode='Markdown'
-    )
-    
-    # Notify the link owner
     try:
-        await context.bot.send_message(
-            chat_id=link['referrer_user_id'],
-            text=f"🎉 **Great news!**\n\n"
-                 f"Someone used your referral link for **{link['service_name']}**!\n"
-                 f"👤 Used by: @{query.from_user.username}\n\n"
-                 f"Your link has been removed as planned.\n"
-                 f"You can submit it again anytime! 🔄",
+        query = update.callback_query
+        user = query.from_user
+        
+        if not user.username:
+            await query.message.reply_text("❌ You need a public username to use this bot.")
+            return
+        
+        # Get all categories with available links
+        categories = db.get_categories()
+        
+        if not categories:
+            await query.message.reply_text(
+                "📭 No referral links available yet.\n\n"
+                "Be the first to submit one!"
+            )
+            return
+        
+        keyboard = [[InlineKeyboardButton(cat, callback_data=f"browse_cat_{i}")] 
+                    for i, cat in enumerate(categories)]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.message.reply_text(
+            "🔍 **Browse Referral Links**\n\n"
+            "Select a category:",
+            reply_markup=reply_markup,
             parse_mode='Markdown'
         )
     except Exception as e:
-        logger.error(f"Failed to notify link owner {link['referrer_user_id']}: {e}")
+        logger.error(f"Error in browse_links_callback: {e}")
+        try:
+            await update.callback_query.answer("❌ An error occurred. Please try again.")
+        except:
+            pass
+
+async def browse_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show links in selected category"""
+    try:
+        query = update.callback_query
+        await query.answer()
+        
+        categories = db.get_categories()
+        cat_index = int(query.data.split('_')[-1])
+        category = categories[cat_index]
+        
+        # Get available links (not used yet)
+        links = db.get_available_links(category)
+        
+        if not links:
+            await query.edit_message_text(
+                f"📭 No available links in **{category}**\n\n"
+                "Try another category or check back later!",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Show links with use buttons
+        keyboard = []
+        message = f"🔗 **Available Links in {category}:**\n\n"
+        
+        for i, link in enumerate(links[:10]):  # Show max 10 links
+            referrer = db.get_user_by_id(link['referrer_user_id'])
+            username = referrer['username'] if referrer else "Unknown"
+            message += (
+                f"**{i+1}. {link['service_name']}**\n"
+                f"📄 {link['description']}\n"
+                f"👤 By @{username}\n\n"
+            )
+            keyboard.append([InlineKeyboardButton(f"🔗 Use {link['service_name']}", callback_data=f"use_link_{link['id']}")])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Back to Categories", callback_data="menu_browse")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(message, parse_mode='Markdown', reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"Error in browse_category: {e}")
+        try:
+            await update.callback_query.answer("❌ An error occurred. Please try again.")
+        except:
+            pass
+
+async def use_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle link usage"""
+    try:
+        query = update.callback_query
+        await query.answer()
+        
+        user_id = query.from_user.id
+        link_id = int(query.data.split('_')[-1])
+        
+        # Get link details
+        link = db.get_link_by_id(link_id)
+        
+        if not link:
+            await query.edit_message_text("❌ This link is no longer available.")
+            return
+        
+        # Check if link is still available
+        if link['current_claims'] >= link['max_claims']:
+            await query.edit_message_text("❌ This link has already been used.")
+            return
+        
+        # Check if user is trying to use their own link
+        if link['referrer_user_id'] == user_id:
+            await query.edit_message_text("❌ You cannot use your own referral link!")
+            return
+        
+        # Mark link as used (increment claims)
+        db.increment_link_claims(link_id)
+        
+        # Show the referral link to user
+        await query.edit_message_text(
+            f"🎉 **Here's your referral link!**\n\n"
+            f"🔗 **Service:** {link['service_name']}\n"
+            f"📄 **Instructions:** {link['description']}\n\n"
+            f"👆 **Click here to sign up:**\n{link['url']}\n\n"
+            f"✅ This link has been marked as used and removed from the list.\n"
+            f"Thanks for using RefLoop!",
+            parse_mode='Markdown'
+        )
+        
+        # Notify the link owner
+        try:
+            await context.bot.send_message(
+                chat_id=link['referrer_user_id'],
+                text=f"🎉 **Great news!**\n\n"
+                     f"Someone used your referral link for **{link['service_name']}**!\n"
+                     f"👤 Used by: @{query.from_user.username}\n\n"
+                     f"Your link has been removed as planned.\n"
+                     f"You can submit it again anytime! 🔄",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify link owner {link['referrer_user_id']}: {e}")
+    except Exception as e:
+        logger.error(f"Error in use_link: {e}")
+        try:
+            await update.callback_query.answer("❌ An error occurred. Please try again.")
+        except:
+            pass
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input based on current state"""
@@ -483,7 +513,18 @@ def main():
     
     # Force polling mode for reliability
     logger.info("Starting polling mode for maximum reliability")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    try:
+        application.run_polling(
+            allowed_updates=Update.ALL_TYPES,
+            poll_interval=0.0,
+            timeout=30,
+            read_timeout=15,
+            write_timeout=15,
+            connect_timeout=15
+        )
+    except Exception as e:
+        logger.error(f"Polling error: {e}")
+        raise
 
 if __name__ == '__main__':
     main()
