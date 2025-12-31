@@ -421,6 +421,64 @@ async def cancel_submission(update, context):
     user_data.clear()
     await query.edit_message_text("Submission cancelled.")
 
+async def admin_command(update, context):
+    """Admin menu command"""
+    user_id = update.effective_user.id
+    
+    if user_id not in ADMIN_USER_IDS:
+        await update.message.reply_text("You don't have permission to use this command.")
+        return
+    
+    keyboard = [
+        [InlineKeyboardButton("View Stats", callback_data="admin_stats")],
+        [InlineKeyboardButton("Close", callback_data="admin_close")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    admin_msg = (
+        "ADMIN PANEL\n"
+        "============\n\n"
+        "Select an option:"
+    )
+    
+    await update.message.reply_text(admin_msg, reply_markup=reply_markup)
+
+async def admin_handler(update, context):
+    """Handle admin menu button clicks"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    if user_id not in ADMIN_USER_IDS:
+        await query.edit_message_text("You don't have permission to use this.")
+        return
+    
+    if query.data == "admin_stats":
+        try:
+            total_users = db.get_total_users()
+            total_links = db.get_total_links()
+            available_links = db.get_available_links_count()
+            
+            stats_msg = (
+                "BOT STATISTICS\n"
+                "===============\n\n"
+                "Total Users: %d\n"
+                "Total Links Submitted: %d\n"
+                "Available Links: %d" % (
+                    total_users if total_users else 0,
+                    total_links if total_links else 0,
+                    available_links if available_links else 0
+                )
+            )
+            await query.edit_message_text(stats_msg)
+        except Exception as e:
+            logger.error("Error getting stats: %s" % str(e))
+            await query.edit_message_text("Error getting statistics.")
+    
+    elif query.data == "admin_close":
+        await query.edit_message_text("Admin menu closed.")
+
 def handle_signal(signum, frame):
     logger.info("Received signal %d, shutting down gracefully..." % signum)
     sys.exit(0)
@@ -441,11 +499,13 @@ def main():
     logger.info("Application created")
     
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("admin", admin_command))
     application.add_handler(CallbackQueryHandler(menu_handler, pattern="^menu_"))
     application.add_handler(CallbackQueryHandler(submit_category, pattern="^cat_"))
     application.add_handler(CallbackQueryHandler(cancel_submission, pattern="^submit_cancel$"))
     application.add_handler(CallbackQueryHandler(browse_category, pattern="^browse_cat_"))
     application.add_handler(CallbackQueryHandler(use_link, pattern="^use_link_"))
+    application.add_handler(CallbackQueryHandler(admin_handler, pattern="^admin_"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
     
     try:

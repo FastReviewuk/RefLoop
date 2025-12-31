@@ -346,3 +346,39 @@ def clear_submission_state(user_id: int):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM submission_state WHERE user_id = %s", (user_id,))
         cursor.close()
+
+def get_total_users():
+    """Get total number of users"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as count FROM users")
+        result = cursor.fetchone()
+        cursor.close()
+        return result['count'] if result else 0
+
+def get_total_links():
+    """Get total number of links"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as count FROM referral_links")
+        result = cursor.fetchone()
+        cursor.close()
+        return result['count'] if result else 0
+
+def get_available_links_count():
+    """Get count of available links (not maxed out)"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as count FROM referral_links WHERE current_claims < max_claims")
+        result = cursor.fetchone()
+        cursor.close()
+        return result['count'] if result else 0
+
+def get_all_links():
+    """Get all referral links"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM referral_links ORDER BY created_at DESC")
+        links = cursor.fetchall()
+        cursor.close()
+        return links
