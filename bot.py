@@ -3,6 +3,7 @@ import os
 import logging
 import sys
 import signal
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -508,6 +509,10 @@ def main():
     logger.info("Creating application...")
     application = Application.builder().token(BOT_TOKEN).build()
     logger.info("Application created")
+    
+    # Add a small delay to allow old instance to shut down
+    import time
+    time.sleep(2)
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("admin", admin_command))
