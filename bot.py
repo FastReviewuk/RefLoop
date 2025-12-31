@@ -21,7 +21,6 @@ load_dotenv(dotenv_path=env_path)
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_USER_IDS = [int(id.strip()) for id in os.getenv('ADMIN_USER_IDS', '').split(',') if id.strip()]
-CHANNEL_ID = -1003625306083
 
 CATEGORIES = [
     "Games",
@@ -87,14 +86,8 @@ async def start(update, context):
     )
     
     try:
-        if update.message.chat.type == 'private':
-            await update.message.reply_text(welcome_text, reply_markup=reply_markup)
-        else:
-            await context.bot.send_message(
-                chat_id=CHANNEL_ID,
-                text=welcome_text,
-                reply_markup=reply_markup
-            )
+        await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+        logger.info("Welcome message sent to user %d" % user.id)
     except Exception as e:
         logger.error("Failed to send welcome message: %s" % str(e))
         await update.message.reply_text("Something went wrong. Please try again.")
@@ -137,29 +130,9 @@ async def submit_link_start(update, context):
     
     db.create_user(user.id, user.username)
     
-    keyboard = [[InlineKeyboardButton("Continue in Private Chat", url="https://t.me/refloop_bot?start=submit")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    try:
-        await context.bot.send_message(
-            chat_id=CHANNEL_ID,
-            text="Click the button below to submit your referral link:\n\n"
-                 "You will be guided through:\n"
-                 "1. Select category\n"
-                 "2. Enter service name\n"
-                 "3. Enter your referral URL\n"
-                 "4. Add description\n\n"
-                 "Completely FREE!",
-            reply_markup=reply_markup
-        )
-    except Exception as e:
-        logger.error("Failed to send message to channel: %s" % str(e))
+    await start_submission_flow(update, context, user)
 
 async def start_submission_flow(update, context, user):
-    user_data = db.get_user(user.id)
-    if not user_data:
-        db.create_user(user.id, user.username)
-    
     keyboard = [[InlineKeyboardButton(cat, callback_data="cat_%d" % i)] 
                 for i, cat in enumerate(CATEGORIES)]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data="submit_cancel")])
@@ -269,19 +242,6 @@ async def submit_description(update, context):
             submission_state['url'],
             description
         )
-    )
-    
-    await context.bot.send_message(
-        chat_id=CHANNEL_ID,
-        text="New link available!\n\n"
-             "%s\n"
-             "%s\n"
-             "Submitted by @%s\n\n"
-             "Use /start to browse and claim!" % (
-                 submission_state['category'],
-                 submission_state['service_name'],
-                 update.effective_user.username
-             )
     )
     
     db.clear_submission_state(user_id)
