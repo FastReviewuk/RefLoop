@@ -483,6 +483,15 @@ def handle_signal(signum, frame):
     logger.info("Received signal %d, shutting down gracefully..." % signum)
     sys.exit(0)
 
+async def error_handler(update, context):
+    """Handle errors in the bot"""
+    logger.error("Update %s caused error %s" % (update, context.error))
+    
+    # If it's a Conflict error, exit to let watchdog restart
+    if "Conflict" in str(context.error):
+        logger.error("Conflict detected - exiting for watchdog restart")
+        sys.exit(1)
+
 def main():
     if not BOT_TOKEN:
         print("Error: BOT_TOKEN not found in environment variables")
@@ -507,6 +516,9 @@ def main():
     application.add_handler(CallbackQueryHandler(use_link, pattern="^use_link_"))
     application.add_handler(CallbackQueryHandler(admin_handler, pattern="^admin_"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
+    
+    # Add error handler
+    application.add_error_handler(error_handler)
     
     try:
         db.init_database()
