@@ -13,6 +13,9 @@ from telegram.ext import (
     filters
 )
 import database as db
+import asyncio
+import signal
+import sys
 
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -444,10 +447,19 @@ async def cancel_submission(update, context):
     user_data.clear()
     await query.edit_message_text("❌ Submission cancelled.")
 
+def handle_signal(signum, frame):
+    """Handle shutdown signals gracefully"""
+    logger.info(f"Received signal {signum}, shutting down gracefully...")
+    sys.exit(0)
+
 def main():
     if not BOT_TOKEN:
         print("Error: BOT_TOKEN not found in environment variables")
         return
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
     
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -468,12 +480,16 @@ def main():
     
     logger.info("✅ All handlers registered")
     logger.info("Starting polling mode for maximum reliability")
+    logger.info("🔍 Watchdog monitoring active - bot will auto-restart on crash")
     
     try:
         application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except KeyboardInterrupt:
+        logger.info("Bot interrupted by user")
+        sys.exit(0)
     except Exception as e:
-        logger.error(f"Polling error: {e}")
-        raise
+        logger.error(f"❌ Polling error: {e}", exc_info=True)
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
