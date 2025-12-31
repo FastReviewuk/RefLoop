@@ -24,15 +24,15 @@ def run_bot():
     while True:
         try:
             logger.info("=" * 70)
-            logger.info(f"🚀 Starting bot process (restart #{restart_count + 1})")
+            logger.info("Starting bot process (restart #%d)" % (restart_count + 1))
             logger.info("=" * 70)
             
             # Start the bot process
             process = subprocess.Popen(
-                [sys.executable, 'bot.py'],
+                ['python3', 'bot.py'],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
+                universal_newlines=True,
                 bufsize=1
             )
             
@@ -42,12 +42,12 @@ def run_bot():
                 if line:
                     print(line.rstrip())
                     if config.VERBOSE_LOGGING:
-                        logger.info(f"BOT: {line.rstrip()}")
+                        logger.info("BOT: %s" % line.rstrip())
                 
                 # Check if process is still running
                 if process.poll() is not None:
                     exit_code = process.returncode
-                    logger.warning(f"⚠️  Bot process exited with code {exit_code}")
+                    logger.warning("Bot process exited with code %d" % exit_code)
                     break
             
             # Process crashed, prepare for restart
@@ -59,8 +59,8 @@ def run_bot():
             
             # Check if we're restarting too frequently
             if len(restart_times) > config.MAX_RESTARTS_PER_HOUR:
-                logger.error(f"❌ Too many restarts ({len(restart_times)}) in the last hour!")
-                logger.error(f"⏸️  Waiting 5 minutes before next restart attempt...")
+                logger.error("Too many restarts (%d) in the last hour!" % len(restart_times))
+                logger.error("Waiting 5 minutes before next restart attempt...")
                 time.sleep(300)
             else:
                 # Calculate wait time with exponential backoff
@@ -69,23 +69,23 @@ def run_bot():
                     config.INITIAL_RESTART_WAIT * (config.BACKOFF_MULTIPLIER ** (restart_count - 1))
                 )
                 wait_time = int(wait_time)
-                logger.info(f"⏳ Waiting {wait_time} seconds before restart...")
+                logger.info("Waiting %d seconds before restart..." % wait_time)
                 time.sleep(wait_time)
         
         except KeyboardInterrupt:
-            logger.info("🛑 Watchdog interrupted by user")
+            logger.info("Watchdog interrupted by user")
             if 'process' in locals():
                 process.terminate()
             break
         except Exception as e:
-            logger.error(f"❌ Watchdog error: {e}", exc_info=True)
+            logger.error("Watchdog error: %s" % str(e), exc_info=True)
             time.sleep(10)
 
 if __name__ == '__main__':
     logger.info("=" * 70)
-    logger.info("🔍 WATCHDOG STARTED - Monitoring bot process")
-    logger.info(f"Max restarts per hour: {config.MAX_RESTARTS_PER_HOUR}")
-    logger.info(f"Initial restart wait: {config.INITIAL_RESTART_WAIT}s")
-    logger.info(f"Max restart wait: {config.MAX_RESTART_WAIT}s")
+    logger.info("WATCHDOG STARTED - Monitoring bot process")
+    logger.info("Max restarts per hour: %d" % config.MAX_RESTARTS_PER_HOUR)
+    logger.info("Initial restart wait: %ds" % config.INITIAL_RESTART_WAIT)
+    logger.info("Max restart wait: %ds" % config.MAX_RESTART_WAIT)
     logger.info("=" * 70)
     run_bot()
