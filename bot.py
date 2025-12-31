@@ -74,15 +74,17 @@ async def start(update, context):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     welcome_text = (
-        "Welcome to RefLoop!\n\n"
-        "Submit your referral links (FREE!)\n"
-        "Browse and use others' links\n\n"
-        "How it works:\n"
-        "- Submit your referral link for free\n"
-        "- Others can use it (one time only)\n"
-        "- Link gets removed after use\n"
-        "- You can resubmit anytime!\n\n"
-        "Choose an option below:"
+        "Welcome to RefLoop!\n"
+        "A 100% free & open referral exchange — no payments, no rewards, just real links that work.\n\n"
+        "Submit your referral link (games, crypto, banks, telecom, etc.)\n"
+        "Browse active links shared by others\n"
+        "Use a link → get your bonus from the service (not from us!)\n"
+        "Each link is automatically removed after one use — fair for everyone\n"
+        "You can submit a new link anytime\n\n"
+        "No tricks. Just smart sharing.\n\n"
+        "Use /submit_link to share yours\n"
+        "Use /browse to find active referrals\n\n"
+        "Let's help each other — one referral at a time."
     )
     
     try:
@@ -509,6 +511,8 @@ def main():
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("admin", admin_command))
+    application.add_handler(CommandHandler("submit_link", submit_link_start))
+    application.add_handler(CommandHandler("browse", browse_links_callback))
     application.add_handler(CallbackQueryHandler(menu_handler, pattern="^menu_"))
     application.add_handler(CallbackQueryHandler(submit_category, pattern="^cat_"))
     application.add_handler(CallbackQueryHandler(cancel_submission, pattern="^submit_cancel$"))
